@@ -10,9 +10,9 @@ MultivarVis <- R6Class(
         style_plt = function(plt) {
             palette <- "Dark2"
             plt <- plt + 
-                theme_classic() + 
-                scale_color_brewer(palette=palette) + 
-                scale_fill_brewer(palette=palette)
+                theme_classic()
+                # scale_color_brewer(palette=palette) + 
+                # scale_fill_brewer(palette=palette)
             plt
         },
         
@@ -41,14 +41,9 @@ MultivarVis <- R6Class(
             return(plt)
         },
 
-        plotMDS = function(expr_m, labels, levels, comp1=1, comp2=2, title="no title") {
+        plotMDS = function(expr_m, levels, comp1=1, comp2=2, title="no title") {
 
-            warning("Warning: Be careful with this function. Make sure that labels are correctly synced with data. TODO: Make it order independent.")
-
-            # if (!all(sort(colnames(expr_m)) == colnames(expr_m))) {
-            #     stop("Sample names and condition matrix are expected to be in sorted order, this didn't seem to be the case now")
-            # }
-
+            labels <- colnames(expr_m)
             d <- stats::dist(scale(t(stats::na.omit(expr_m)), center=TRUE, scale=TRUE))
             fit <- stats::cmdscale(d, eig=TRUE, k=2)
             x <- fit$points[, comp1]
@@ -62,7 +57,7 @@ MultivarVis <- R6Class(
             # Retrieves a vector with percentage contributions for each PC
 
             expr_m_nona <- expr_m[complete.cases(expr_m),]
-            pca_obj <- prcomp(t(expr_m_nona), scale=TRUE, center=TRUE)
+            pca_object <- prcomp(t(expr_m_nona), scale=TRUE, center=TRUE)
             # pca_object <- self$get_pca_object(expr_m)
 
             percentVar <- pca_object$sdev^2 / sum(pca_object$sdev^2 )
@@ -74,12 +69,22 @@ MultivarVis <- R6Class(
 
             # Directly outputs the PCA numbers together with PC fractions
 
-            comp_perc <- get_component_fraction(expr_m)
-            plot(100 * comp_perc, main="PC loadings", xlab="PC", ylab="Perc. var")
+            comp_perc <- self$get_component_fraction(expr_m) * 100
+            plot_df <- data.frame(x=paste0("", 1:9), y=head(comp_perc, 9))
+            ggplot(plot_df, aes(x, y)) + geom_bar(stat="identity") + 
+                theme_classic() +
+                ggtitle("PCA loadings") + ylab("Variance (%)") + xlab("Principal component")
+            # plot(100 * comp_perc, main="PC loadings", xlab="PC", ylab="Perc. var")
         },
 
-        dendogram = function(data_m, samples, labels, color_levels, pick_top_variance=null, title="Dendogram") {
+        dendogram = function(data_m, color_levels, labels=NULL, pick_top_variance=null, title="Dendogram") {
 
+            samples <- colnames(data_m)
+            
+            if (is.null(labels)) {
+                labels <- samples
+            }
+            
             # Setup data
             expr_m_nona <- data_m[complete.cases(data_m),]
 
