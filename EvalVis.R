@@ -79,7 +79,8 @@ EvalVis <- R6Class(
                 data.frame(pvals=pvals), 
                 aes(pvals)) + 
                 geom_histogram(binwidth=binwidth, na.rm=na.rm, fill="#268BD2") + 
-                ggtitle(title)
+                ggtitle(title) +
+                xlim(-0.1, 1.1)
 
             if (!is.null(vline)) {
                 plt <- plt + geom_vline(xintercept=vline)
