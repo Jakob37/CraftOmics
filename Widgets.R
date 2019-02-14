@@ -382,7 +382,7 @@ MyWidgets <- R6Class(
             }
             dataset_names <- names(stat_data)
             default_name <- dataset_names[1]
-            full_annotation <- rowData(stat_data[1])
+            full_annotation <- rowData(stat_data[[1]])
 
             shinyApp(
                 ui = fluidPage(
@@ -455,6 +455,7 @@ MyWidgets <- R6Class(
             dataset_names <- names(stat_data)
             default_name <- dataset_names[1]
             dataset <- stat_data[[1]]
+            row_ids <- rowData(dataset)[[id_col]]
             
             # selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
             
