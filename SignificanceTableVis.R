@@ -49,15 +49,18 @@ SignificanceTableVis <- R6Class(
             p
         },
         
-        plot_comp_venns = function(sig_tables, contrasts, sig_thres=0.1, sig_col="adj.P.Val", 
-                                        log2_fold_thres=0, fold_name="logFC") {
+        plot_comp_venns = function(sig_table, contrasts, sig_thres=0.1, base_sig_col="adj.P.Val", 
+                                        log2_fold_thres=0, base_fold_name="logFC") {
             
             contrast_sig <- list()
             folds <- list()
-            for (name in names(sig_tables)) {
-                sigs <- sig_tables[[name]][[sig_col]] < sig_thres
-                contrast_sig[[name]] <- sigs
-                folds[[name]] <- sig_tables[[name]][[fold_name]]
+            for (contrast in contrasts) {
+                
+                sig_col <- paste(contrast, base_sig_col, sep=".")
+                fold_name <- paste(contrast, base_fold_name, sep=".")
+                sigs <- sig_table[[sig_col]] < sig_thres
+                contrast_sig[[contrast]] <- sigs
+                folds[[contrast]] <- sig_table[[fold_name]]
             }
             
             comp_count <- length(contrasts)

@@ -340,13 +340,180 @@ MyWidgets <- R6Class(
                 options=list(height=height)
             )
         },
-        venn_widgets = function() {
+        venn_widgets = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
+                                fold_col="logFC", height=1100) {
+            
+            p_cols <- paste(contrasts, p_col, sep=".")
+            dataset_names <- names(stat_data)
+            default_name <- dataset_names[1]
+            dataset <- stat_data[[1]]
+            
+            shinyApp(
+                ui = fluidPage(
+                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                    selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
+                    sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
+                    sliderInput("fold", "Fold threshold:", value=0, min=0, max=5, step=0.25),
+                    plotOutput("plots")
+                ),
+                server = function(input, output) {
+                    output$plots = renderPlot({
+
+                        rdf <- data.frame(rowData(stat_data[[input$data]]))
+                        out <- stv$plot_comp_venns(
+                            rdf, 
+                            contrasts, 
+                            base_sig_col = input$type,
+                            base_fold_name = fold_col,
+                            sig_thres = input$thres, 
+                            log2_fold_thres = input$fold
+                        )
+                        grid.arrange(grobs=out, ncol=3)
+                    })
+                },
+                options=list(height=800)
+            )
+        },
+        
+        table_widget = function(name, stat_data, height=900, default_selected=NULL) {
+            
+            if (is.null(default_selected)) {
+                default_selected <- colnames(rowData(stat_data[[1]]))
+            }
+            dataset_names <- names(stat_data)
+            default_name <- dataset_names[1]
+            full_annotation <- rowData(stat_data[1])
+
+            shinyApp(
+                ui = fluidPage(
+                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                    selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
+                    splitLayout(
+                        sliderInput("fdrthres", "FDR thres.", 0.1, min=0, max=1, step=0.01),
+                        sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
+                    ),
+                    checkboxInput("exclusive", "Only show significant in all groups"),
+                    downloadButton('download', "Download Table"),
+                    DT::dataTableOutput("table")
+                ),
+                server = function(input, output) {
+                    
+                    thedata <- reactive({
+                        
+                            unfiltered <- rowData(stat_data[[input$data]]) %>% 
+                                data.frame() %>%
+                                select(input$fields[order(match(input$fields, default_selected))])
+                            
+                            if (!input$exclusive) {
+                                unfiltered %>% 
+                                    filter(batch1.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres)
+                            }
+                            else {
+                                unfiltered %>%
+                                    filter(batch1.adj.P.Val < input$fdrthres & batch2.adj.P.Val < input$fdrthres & batch3.adj.P.Val < input$fdrthres)
+                            }
+                        })
+                    
+                    output$table = DT::renderDataTable({
+                        
+                        thedata() %>% 
+                            datatable(options=list(
+                                pageLength=10, 
+                                scrollX=TRUE, 
+                                autoWidth=TRUE,
+                                columnDefs=list(list(width="10px", targets="_all"))
+                            )) %>%
+                            DT::formatRound(columns=input$fields[input$fields %in% numeric_cols], digits=input$decimals)
+                    })
+                    
+                    output$download <- downloadHandler(
+                        filename = function() {"result_table.tsv"},
+                        content = function(fname) {
+                            write_tsv(thedata(), fname)
+                        } 
+                    )
+                },
+                options=list(height=900)
+            )
             
         },
-        table_widget = function() {
+        spotcheck_widget = function(name, stat_data, id_col, split_col, split_vals, contrast_cond,
+                                    height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL) {
             
-        },
-        spotcheck_widget = function() {
+            if (is.null(default_data)) {
+                default_data <- colnames(rowData(stat_data[[1]]))
+            }
+            
+            if (is.null(default_gene)) {
+                default_gene <- colnames(rowData(stat_data[[1]]))
+            }
+            
+            if (is.null(color_cond)) {
+                color_cond <- colnames(colData(dataset))[1]
+            }
+            
+            dataset_names <- names(stat_data)
+            default_name <- dataset_names[1]
+            dataset <- stat_data[[1]]
+            
+            # selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
+            
+            shinyApp(
+                ui = fluidPage(
+                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                    selectInput("rowid", "Row ID", selected=default_gene, choices = row_ids),
+                    selectInput("color", "Coloring category", selected=color_cond, choices = colnames(colData(dataset))),
+                    checkboxInput("colorscatter", "Color boxplot scatter on cond"),
+                    plotOutput("scatters"),
+                    plotOutput("contrast")
+                ),
+                server = function(input, output) {
+                    output$scatters = renderPlot({
+                        
+                        target <- comb_se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        make_scatter <- function(row_ses, title) {
+                            fert_vals <- colData(row_ses)$Fertility
+                            expr_vals <- assay(row_ses)[1, ]
+                            color <- colData(row_ses)[[input$color]]
+                            ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color), aes(expr, fert, color=color)) + 
+                                geom_point() +
+                                xlab("Expression") +
+                                ylab("Fertility") +
+                                theme_classic() +
+                                ggtitle(title)
+                        }
+                        
+                        b1_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[1]], "Batch 1")
+                        b2_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[2]], "Batch 2")
+                        b3_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[3]], "Batch 3")
+                        
+                        ggarrange(b1_plt, b2_plt, b3_plt, ncol=3, common.legend=TRUE, legend="bottom")
+                    })
+                    
+                    output$contrast = renderPlot({
+                        
+                        target <- comb_se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        
+                        make_box <- function(row_ses, title) {
+                            expr_vals <- assay(row_ses)[1, ]
+                            high_fert <- colData(row_ses[1, ])[[contrast_cond]]
+                            stat_df <- data.frame(expr=expr_vals, high_fert=high_fert, color=colData(row_ses[1, ])[[input$color]])
+                            plt <- ggplot(stat_df, aes(x=high_fert, y=expr_vals, fill=high_fert)) + geom_boxplot(alpha=0.5) + theme_classic()
+                            
+                            if (input$colorscatter) plt + geom_point(aes(color=color))
+                            else plt + geom_point()
+                        }
+                        
+                        b1_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[1]], split_vals[1])
+                        b2_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[2]], split_vals[2])
+                        b3_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[3]], split_vals[3])
+                        
+                        ggarrange(b1_plt, b2_plt, b3_plt, ncol=3, common.legend=TRUE, legend="bottom")
+                    })
+                },
+                options=list(height=height)
+            )
+            
             
         }
     ),
