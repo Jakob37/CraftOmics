@@ -29,13 +29,24 @@ EvalVis <- R6Class(
         },
         
 
-        abundance_bars = function(data_m, title="Sample abundances", color_col=NULL, show_missing=F, cond_order=F) {
+        abundance_bars = function(data_m, title="Sample abundances", color_col=NULL, 
+                                  show_missing=FALSE, show_average=FALSE, cond_order=FALSE) {
 
             if (!show_missing) {
-                values <- colSums(data_m, na.rm=T)
+                if (!show_average) {
+                    values <- colSums(data_m, na.rm=TRUE)
+                }
+                else {
+                    values <- colMeans(data_m, na.rm=TRUE)
+                }
             }
             else {
-                values <- colSums(is.na(data_m))
+                if (!show_average) {
+                    values <- colSums(is.na(data_m))
+                }
+                else {
+                    values <- colMeans(is.na(data_m))
+                }
             }
 
             if (!is.null(color_col)) {

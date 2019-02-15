@@ -5,6 +5,45 @@ library(shiny)
 
 MyWidgets <- R6Class(
     public = list(
+        density_widget = function(name, datasets, outlier_sets, height=800, default_cond=NULL) {
+            
+            dataset_names <- names(datasets)
+            default_name <- dataset_names[1]
+            dataset <- datasets[[1]]
+            
+            if (is.null(default_cond)) {
+                default_cond <- colnames(colData(dataset))[1]
+            }
+            
+            shinyApp(
+                ui = fluidPage(
+                    
+                    tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
+                    splitLayout(
+                        selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                        selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
+                    ),
+                    numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
+                    plotOutput("qq")
+                ),
+                server = function(input, output) {
+                    output$qq = renderPlot({
+                        
+                        dataset <- datasets[[input$data]]
+                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
+                        parsed <- self$parse_dataset(dataset, outliers)
+                        
+                        ev$sample_dist(
+                            parsed$sdf, 
+                            color_col=as.factor(parsed$ddf[[input$cond]]), 
+                            title="Loess distribution", 
+                            max_count=input$subset)
+                    })
+                },
+                options=list(height=height)
+            )
+        },
+        
         total_intensity_widget = function(name, datasets, outlier_sets, height=800, default_cond=NULL) {
             
             dataset_names <- names(datasets)
@@ -24,7 +63,10 @@ MyWidgets <- R6Class(
                     ),
                     splitLayout(
                         checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
-                        checkboxInput("show_na", "Show NA counts:", value=FALSE)
+                        fluidRow(
+                            checkboxInput("show_na", "Show NA counts", value=FALSE),
+                            checkboxInput("show_mean", "Show mean", value=FALSE)
+                        )
                     ),
                     plotOutput("plot")
                 ),
@@ -33,13 +75,14 @@ MyWidgets <- R6Class(
                         
                         dataset <- datasets[[input$data]]
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- private$parse_dataset(dataset, outliers)
+                        parsed <- self$parse_dataset(dataset, outliers)
 
                         plt <- ev$abundance_bars(
                             parsed$sdf, 
                             color_col=as.factor(parsed$ddf[[input$cond]]), 
                             title=name, 
-                            show_missing=input$show_na)
+                            show_missing=input$show_na, 
+                            show_average=input$show_mean)
                         plt
                     })
                 },
@@ -76,7 +119,7 @@ MyWidgets <- R6Class(
                         
                         dataset <- datasets[[input$data]]
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- private$parse_dataset(dataset, outliers)
+                        parsed <- self$parse_dataset(dataset, outliers)
                         
                         plt <- ev$qq(
                             parsed$sdf, 
@@ -132,7 +175,7 @@ MyWidgets <- R6Class(
                         
                         dataset <- datasets[[input$data]]
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- private$parse_dataset(dataset, outliers)
+                        parsed <- self$parse_dataset(dataset, outliers)
                         
                         title1 <- paste0("Cond: ", input$cond_plt1, " PCs: ", input$pc1_plt1, ", ", input$pc2_plt1)
                         plt1 <- mv$pca(
@@ -186,7 +229,7 @@ MyWidgets <- R6Class(
                         
                         dataset <- datasets[[input$data]]
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- private$parse_dataset(dataset, outliers)
+                        parsed <- self$parse_dataset(dataset, outliers)
                         mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]]))
                         
                     }, height = plot_height)
@@ -195,7 +238,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        phist_widget = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", height=700) {
+        phist_widget = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", height=1000) {
             
             p_cols <- paste(contrasts, p_col, sep=".")
             dataset_names <- names(stat_data)
@@ -375,7 +418,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        table_widget = function(name, stat_data, height=900, default_selected=NULL) {
+        table_widget = function(name, stat_data, height=1000, default_selected=NULL) {
             
             if (is.null(default_selected)) {
                 default_selected <- colnames(rowData(stat_data[[1]]))
@@ -396,23 +439,39 @@ MyWidgets <- R6Class(
                     downloadButton('download', "Download Table"),
                     DT::dataTableOutput("table")
                 ),
-                server = function(input, output) {
+                server = function(input, output, session) {
                     
                     thedata <- reactive({
                         
-                            unfiltered <- rowData(stat_data[[input$data]]) %>% 
-                                data.frame() %>%
-                                select(input$fields[order(match(input$fields, default_selected))])
-                            
-                            if (!input$exclusive) {
-                                unfiltered %>% 
-                                    filter(batch1.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres)
-                            }
-                            else {
-                                unfiltered %>%
-                                    filter(batch1.adj.P.Val < input$fdrthres & batch2.adj.P.Val < input$fdrthres & batch3.adj.P.Val < input$fdrthres)
-                            }
-                        })
+                        print(colnames(rowData(stat_data[[input$data]])))
+                    
+                        unfiltered <- rowData(stat_data[[input$data]]) %>% 
+                            data.frame() %>% 
+                            select(input$fields) %>%
+                            data.frame()
+                            # select(input$fields[order(match(input$fields, colnames(rowData(stat_data[[input$data]]))))])
+                        
+                        unfiltered
+                        
+                        # if (!input$exclusive) {
+                        #     unfiltered
+                        #         filter(batch1.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres)
+                        # }
+                        # else {
+                        #     unfiltered
+                        #         filter(batch1.adj.P.Val < input$fdrthres & batch2.adj.P.Val < input$fdrthres & batch3.adj.P.Val < input$fdrthres)
+                        # }
+                    })
+                    
+                    observe({
+                        new_choices <- colnames(rowData(stat_data[[input$data]]))
+                        updateSelectInput(
+                            session,
+                            "fields",
+                            choices=new_choices,
+                            selected=input$fields
+                        )
+                    })
                     
                     output$table = DT::renderDataTable({
                         
@@ -423,7 +482,7 @@ MyWidgets <- R6Class(
                                 autoWidth=TRUE,
                                 columnDefs=list(list(width="10px", targets="_all"))
                             )) %>%
-                            DT::formatRound(columns=input$fields[input$fields %in% numeric_cols], digits=input$decimals)
+                            DT::formatRound(columns=input$fields, digits=input$decimals)
                     })
                     
                     output$download <- downloadHandler(
@@ -433,7 +492,7 @@ MyWidgets <- R6Class(
                         } 
                     )
                 },
-                options=list(height=900)
+                options=list(height=height)
             )
             
         },
@@ -471,7 +530,8 @@ MyWidgets <- R6Class(
                 server = function(input, output) {
                     output$scatters = renderPlot({
                         
-                        target <- comb_se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        se <- stat_data[[input$data]]
+                        target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
                         make_scatter <- function(row_ses, title) {
                             fert_vals <- colData(row_ses)$Fertility
                             expr_vals <- assay(row_ses)[1, ]
@@ -493,7 +553,8 @@ MyWidgets <- R6Class(
                     
                     output$contrast = renderPlot({
                         
-                        target <- comb_se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        se <- stat_data[[input$data]]
+                        target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
                         
                         make_box <- function(row_ses, title) {
                             expr_vals <- assay(row_ses)[1, ]
@@ -516,16 +577,16 @@ MyWidgets <- R6Class(
             )
             
             
-        }
-    ),
-    private = list(
+        },
         parse_dataset = function(dataset, outliers) {
             non_outliers <- colnames(dataset)[!colnames(dataset) %in% outliers]
             sdf <- assay(dataset)[, non_outliers]
             ddf <- data.frame(colData(dataset)) %>% filter(sample %in% non_outliers)
             rdf <- rowData(dataset) %>% data.frame()
             list("sdf"=sdf, "ddf"=ddf, "rdf"=rdf)
-        },
+        }
+    ),
+    private = list(
         make_scale = 1.01
     )
 ) 
