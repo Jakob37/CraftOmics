@@ -77,14 +77,14 @@ StatTools <- R6Class(
         contrasts = function(data_m, conditions, contrasts, verbose=FALSE) {
             
             stat_tables <- lapply(contrasts, function(contr){
-                tabl <- self$contrast(data_m, conditions, contr)
                 if (verbose) print(paste("Calculating: ", paste(contr, collapse=", ")))
-                if (verbose) st$summarize(tabl)
+                tabl <- self$contrast(data_m, conditions, contr, verbose=verbose)
                 tabl
             })
         },
 
-        contrast = function(data_m, level_factor, target_levels, type="limma", batch_factor=NULL, filter_factor=NULL, filter_level=NULL) {
+        contrast = function(data_m, level_factor, target_levels, type="limma", batch_factor=NULL, 
+                            filter_factor=NULL, filter_level=NULL, verbose=FALSE) {
 
             if (length(c(filter_factor, filter_level)) == 1) {
                 stop("Need to assign either neither or both variables 'filter_factor' and 'filter_level'")
@@ -135,6 +135,10 @@ StatTools <- R6Class(
                 stop(paste("Unknown type:", type))
             }
 
+            if (verbose) {
+                st$summarize(stats_table)
+            }
+            
             stats_table
         },
 
