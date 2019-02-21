@@ -6,8 +6,15 @@ library(tidyverse)
 ROCVisuals <- R6Class(
     public = list(
 
-        roc = function(truth_vector, pvals_list, annot=NULL, reversed_size_importance=T, 
-                       cuts=0, round=3, ymin=0, ymax=1, legend_name="Stat type", title="ROC", show_auc=F) {
+        roc = function(truth_vector, pvals_list, annot=NULL, reversed_size_importance=TRUE, 
+                       cuts=0, round=3, ymin=0, ymax=1, legend_name="Stat type", title="ROC", 
+                       show_auc=FALSE, subset=NULL) {
+            
+            if (!is.null(subset)) {
+                warning("Subsetting, only for debugging purposes")
+                truth_vector <- head(truth_vector, n=subset)
+                pvals_list <- lapply(pvals_list, head, n=subset)
+            }
             
             if (typeof(pvals_list) != "list") {
                 warning("pvals_list argument should be provided as a list of vectors.",
@@ -55,6 +62,45 @@ ROCVisuals <- R6Class(
         
         auc = function(plt_obj) {
             plotROC::calc_auc(plt_obj)
+        },
+        
+        perf_measures = function(confusion_matrix, true_pattern, false_pattern) {
+            
+            
+            tn <- confusion_matrix$table[false_pattern, false_pattern]
+            tp <- confusion_matrix$table[true_pattern, true_pattern]
+            fn <- confusion_matrix$table[false_pattern, true_pattern]
+            fp <- confusion_matrix$table[true_pattern, false_pattern]
+            
+            sensitivity <- tp / (tp + fn)
+            specificity <- tn / (tn + fp)
+            pos_pred <- tp / (tp + fp)
+            neg_pred <- tn / (tn + fn)
+            accuracy <- (tp + tn) / (tp + fp + fn + tn)
+            mcc <- (tp * tn - fp * fn) / (sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)))
+            
+            data.frame(
+                sensitivity,
+                specificity,
+                pos_pred,
+                neg_pred,
+                accuracy,
+                mcc,
+                tp,
+                tn,
+                fp,
+                fn,
+                tot=tp+tn+fp+fn
+            )
+        },
+        
+        show_measures = function(measure_df, ignores=NULL) {
+            
+            measure_df$analysis <- rownames(measure_df)
+            long_df <- tidyr::gather(measure_df, "measure", "value", -analysis, -one_of(ignores))
+            ggplot(long_df) +
+                geom_bar(aes(x=analysis, y=value, fill=measure), stat="identity", position=position_dodge()) +
+                ggtitle("Stat. measures")
         }
     ),
     private = list()

@@ -1,5 +1,6 @@
 
 library(shiny)
+library(gridExtra)
 
 # Datasets expected format: Named list linked to SummarizedExperiment instances
 
@@ -157,12 +158,12 @@ MyWidgets <- R6Class(
                     ),
                     checkboxInput("as_label", "Show as text"),
                     splitLayout(
-                        selectInput("pc1_plt1", "PC1 (plot1):", choices=1:10, selected=1),
-                        selectInput("pc1_plt2", "PC1 (plot2):", choices=1:10, selected=1)
+                        selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
+                        selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1)
                     ),
                     splitLayout(
-                        selectInput("pc2_plt1", "PC2 (plot1):", choices=1:10, selected=2),
-                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:10, selected=2)
+                        selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
+                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
                     ),
                     splitLayout(
                         selectInput("cond_plt1", "Condition (plot1):", selected=default_cond1, choices = colnames(colData(dataset))),
@@ -194,7 +195,6 @@ MyWidgets <- R6Class(
                                 ggtitle(title2)
                         
                         scree <- mv$plot_component_fraction(parsed$sdf)
-                        
                         grid.arrange(plt1, plt2, scree, ncol=2)
                     }, height = 800)
                 },

@@ -55,7 +55,7 @@ MultivarVis <- R6Class(
         get_component_fraction = function(expr_m) {
 
             # Retrieves a vector with percentage contributions for each PC
-
+            
             expr_m_nona <- expr_m[complete.cases(expr_m),]
             pca_object <- prcomp(t(expr_m_nona), scale=TRUE, center=TRUE)
             # pca_object <- self$get_pca_object(expr_m)
@@ -70,7 +70,7 @@ MultivarVis <- R6Class(
             # Directly outputs the PCA numbers together with PC fractions
 
             comp_perc <- self$get_component_fraction(expr_m) * 100
-            plot_df <- data.frame(x=paste0("", 1:9), y=head(comp_perc, 9))
+            plot_df <- data.frame(x=paste0("", seq_len(length(comp_perc))), y=comp_perc)
             ggplot(plot_df, aes(x, y)) + geom_bar(stat="identity") + 
                 theme_classic() +
                 ggtitle("PCA loadings") + ylab("Variance (%)") + xlab("Principal component")
