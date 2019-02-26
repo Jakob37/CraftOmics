@@ -156,7 +156,10 @@ MyWidgets <- R6Class(
                         selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
                         checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL)
                     ),
-                    checkboxInput("as_label", "Show as text"),
+                    splitLayout(
+                        checkboxInput("as_label", "Show as text"),
+                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1)
+                    ),
                     splitLayout(
                         selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
                         selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1)
@@ -194,7 +197,7 @@ MyWidgets <- R6Class(
                             label=input$as_label) + 
                                 ggtitle(title2)
                         
-                        scree <- mv$plot_component_fraction(parsed$sdf)
+                        scree <- mv$plot_component_fraction(parsed$sdf, max_comps=input$pc_comps)
                         grid.arrange(plt1, plt2, scree, ncol=2)
                     }, height = 800)
                 },

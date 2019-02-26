@@ -65,11 +65,15 @@ MultivarVis <- R6Class(
             return(percentVar)
         },
 
-        plot_component_fraction = function(expr_m) {
+        plot_component_fraction = function(expr_m, max_comps=NULL) {
 
             # Directly outputs the PCA numbers together with PC fractions
 
             comp_perc <- self$get_component_fraction(expr_m) * 100
+            if (!is.null(max_comps)) {
+                comp_perc <- head(comp_perc, max_comps)
+            }
+            
             plot_df <- data.frame(x=paste0("", seq_len(length(comp_perc))), y=comp_perc)
             ggplot(plot_df, aes(x, y)) + geom_bar(stat="identity") + 
                 theme_classic() +
