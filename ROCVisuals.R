@@ -10,6 +10,14 @@ ROCVisuals <- R6Class(
                        cuts=0, round=3, ymin=0, ymax=1, legend_name="Stat type", title="ROC", 
                        show_auc=FALSE, subset=NULL) {
             
+            if (!all(unname(unlist(lapply(pvals_list, length))) == length(truth_vector))) {
+                stop(
+                    "truth_vector and all pvals_lists must be same length\n",
+                    "Found truth_vector: ", length(truth_vector), " and pvals_list: ", 
+                    paste(unname(unlist(lapply(scores, length))), collapse=", ")
+                )
+            }
+            
             if (!is.null(subset)) {
                 warning("Subsetting, only for debugging purposes")
                 truth_vector <- head(truth_vector, n=subset)
