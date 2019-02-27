@@ -84,14 +84,24 @@ EvalVis <- R6Class(
             plt
         },
 
-        pvalhist = function(pvals, title="P value histogram", binwidth=0.01, vline=NULL, na.rm=FALSE) {
+        pvalhist = function(pvals, title="P value histogram", binwidth=0.01, bincount=NULL, vline=NULL, na.rm=FALSE) {
             
-            plt <- ggplot(
-                data.frame(pvals=pvals), 
-                aes(pvals)) + 
-                geom_histogram(binwidth=binwidth, na.rm=na.rm, fill="#268BD2") + 
-                ggtitle(title) +
-                xlim(-0.1, 1.1)
+            if (is.null(bincount)) {
+                plt <- ggplot(
+                    data.frame(pvals=pvals), 
+                    aes(pvals)) + 
+                    geom_histogram(binwidth=binwidth, na.rm=na.rm, fill="#268BD2") + 
+                    ggtitle(title) +
+                    xlim(-0.1, 1.1)
+            }
+            else {
+                plt <- ggplot(
+                    data.frame(pvals=pvals), 
+                    aes(pvals)) + 
+                    geom_histogram(bins=bincount, na.rm=na.rm, fill="#268BD2") + 
+                    ggtitle(title) +
+                    xlim(-0.1, 1.1)
+            }
 
             if (!is.null(vline)) {
                 plt <- plt + geom_vline(xintercept=vline)

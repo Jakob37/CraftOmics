@@ -241,86 +241,16 @@ MyWidgets <- R6Class(
             )
         },
         
-        # phist_widget = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", height=1000) {
-        #     
-        #     p_cols <- paste(contrasts, p_col, sep=".")
-        #     dataset_names <- names(stat_data)
-        #     default_name <- dataset_names[1]
-        #     dataset <- stat_data[[1]]
-        #     
-        #     shinyApp(
-        #         ui = fluidPage(
-        #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-        #             numericInput("bin", "P-hist bin width", value=0.02, min=0.0001, max=0.1),
-        #             checkboxInput("fdr", "Q-value histogram"),
-        #             splitLayout(
-        #                 checkboxInput("vline", "Draw vertical line"),
-        #                 sliderInput("vline_val", "Vertical line position", min=0, max=1, step=0.01, value=0.1)
-        #             ),
-        #             checkboxInput("scaleaxis", "Scale Y axes"),
-        #             plotOutput("plots", height=200)
-        #         ),
-        #         server = function(input, output) {
-        #             
-        #             output$plots = renderPlot({
-        #                 
-        #                 rdf <- data.frame(rowData(stat_data[[input$data]]))
-        #                 
-        #                 plts <- list()
-        #                 for (contrast in contrasts) {
-        #                     if (!input$fdr) {
-        #                         target_col <- paste(contrast, p_col, sep=".")
-        #                     }
-        #                     else {
-        #                         target_col <- paste(contrast, q_col, sep=".")
-        #                     }
-        # 
-        #                     if (input$vline) {
-        #                         vline <- input$vline_val
-        #                     }
-        #                     else {
-        #                         vline <- NULL
-        #                     }
-        #                     
-        #                     plt <- ev$pvalhist(rdf[[target_col]], na.rm=TRUE, binwidth=input$bin, vline=vline) +
-        #                         theme_classic() +
-        #                         scale_fill_brewer(palette="Dark2") +
-        #                         ggtitle(contrast)
-        #                     plts[[contrast]] <- plt
-        #                 }
-        #                 
-        #                 if (input$scaleaxis) {
-        #                     max_vals <- lapply(plts, function(plt) {
-        #                         layer_scales(plt)$y$range$range[2]
-        #                     })
-        #                     plts <- lapply(plts, function(plt) {
-        #                         plt <- plt + ylim(0, 1.01 * max(unlist(max_vals)))
-        #                     })
-        #                 }
-        #                 
-        #                 grid.arrange(grobs=plts, ncol=1)
-        #             }, height = 500)
-        #         },
-        #         options=list(height=height)
-        #     )
-        # },
-        
-        hists_widget = function(name, stat_data, contrasts, show_cols=c("P.Value", "adj.P.Val", "log2Fold", "AveExpr"), height=1000) {
+        hists_widget = function(name, stat_data, contrasts, show_cols=c("P.Value", "adj.P.Val", "logFC", "AveExpr"), height=1000) {
             
-            p_cols <- paste(contrasts, p_col, sep=".")
             dataset_names <- names(stat_data)
             default_name <- dataset_names[1]
-            dataset <- stat_data[[1]]
-            
+
             shinyApp(
                 ui = fluidPage(
                     selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                    numericInput("bin", "Bin width", value=0.02, min=0.0001, max=0.1),
+                    numericInput("bins", "Bin count", value=50, min=1, max=100),
                     selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
-                    splitLayout(
-                        checkboxInput("vline", "Draw vertical line"),
-                        sliderInput("vline_val", "Vertical line position", min=0, max=1, step=0.01, value=0.1)
-                    ),
                     checkboxInput("scaleaxis", "Scale Y axes"),
                     plotOutput("plots", height=200)
                 ),
@@ -329,39 +259,29 @@ MyWidgets <- R6Class(
                     output$plots = renderPlot({
                         
                         rdf <- data.frame(rowData(stat_data[[input$data]]))
-                        
                         plts <- list()
                         for (contrast in contrasts) {
                             
                             target_col <- paste(contrast, input$target_col, sep=".")
+                            xmin <- min(rdf[[target_col]])
+                            xmax <- max(rdf[[target_col]])
                             
-                            #if (!input$fdr) {
-                            #    target_col <- paste(contrast, p_col, sep=".")
-                            #}
-                            #else {
-                            #    target_col <- paste(contrast, q_col, sep=".")
-                            #}
-                            
-                            if (input$vline) {
-                                vline <- input$vline_val
-                            }
-                            else {
-                                vline <- NULL
-                            }
-                            
-                            plt <- ev$pvalhist(rdf[[target_col]], na.rm=TRUE, binwidth=input$bin, vline=vline) +
+                            plt <- ev$pvalhist(rdf[[target_col]], na.rm=TRUE, bincount=input$bins) +
                                 theme_classic() +
                                 scale_fill_brewer(palette="Dark2") +
-                                ggtitle(contrast)
+                                ggtitle(contrast) + 
+                                xlim(xmin, xmax)
                             plts[[contrast]] <- plt
                         }
                         
                         if (input$scaleaxis) {
-                            max_vals <- lapply(plts, function(plt) {
+                            max_y_vals <- lapply(plts, function(plt) {
                                 layer_scales(plt)$y$range$range[2]
                             })
+
                             plts <- lapply(plts, function(plt) {
-                                plt <- plt + ylim(0, 1.01 * max(unlist(max_vals)))
+                                plt <- plt + 
+                                    ylim(0, 1.01 * max(unlist(max_y_vals)))
                             })
                         }
                         

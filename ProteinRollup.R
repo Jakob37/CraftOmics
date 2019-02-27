@@ -81,6 +81,8 @@ ProteinRollup <- R6Class(
         },
         
         zrollup = function(peptides, combine_func=median) {
+            warning("Relatively untested, and no Grubbs outlier test performed")
+            
             num_peps <- nrow(peptides)
             #res <- matrix(NA, nrow=1, ncol=ncol(peptides))
             
@@ -97,6 +99,8 @@ ProteinRollup <- R6Class(
         },
         
         rrollup = function(peptides, combine_func=median) {
+            warning("Relatively untested, and no Grubbs outlier test performed")
+            
             num_peps <- nrow(peptides)
             #res <- matrix(NA, nrow=1, ncol=ncol(peptides))
             
@@ -132,6 +136,8 @@ ProteinRollup <- R6Class(
         
         # qrollup_thres: 0 - 1 value, peptides above threshold used for rollup
         qrollup = function(peptides, qrollup_thres, combine_func=median) {
+            
+            warning("Relatively untested, and no Grubbs outlier test performed")
             num_peps <- nrow(peptides)
             if (num_peps == 1) {
                 protein_val <- unlist(peptides)
