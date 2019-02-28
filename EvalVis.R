@@ -4,7 +4,7 @@ library(reshape2)
 
 EvalVis <- R6Class(
     public = list(
-        sample_dist = function(data_m, title="Sample densities", alpha=0.001, color_col=NULL, max_count=NULL) {
+        sample_dist = function(data_m, title="Sample densities", alpha=0.001, color_col=NULL, max_count=NULL, seed=37) {
             
             samples <- colnames(data_m)
             if (is.null(color_col)) {
@@ -12,6 +12,7 @@ EvalVis <- R6Class(
             }
             
             if (!is.null(max_count)) {
+                set.seed(seed)
                 data_m <- data_m %>% data.frame() %>% sample_n(max_count, replace=FALSE)
                 title <- paste(title, "Subset:", max_count)
             }

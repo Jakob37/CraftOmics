@@ -22,23 +22,41 @@ MyWidgets <- R6Class(
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     splitLayout(
                         selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                        selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
+                        selectInput("data2", "Dataset:", selected=default_name, choices=dataset_names)
+                    ),
+                    splitLayout(
+                        selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
+                        selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
                     ),
                     numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
+                    checkboxInput("fulldata", "Use full data", value = FALSE),
                     plotOutput("qq")
                 ),
                 server = function(input, output) {
                     output$qq = renderPlot({
                         
-                        dataset <- datasets[[input$data]]
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- self$parse_dataset(dataset, outliers)
                         
-                        ev$sample_dist(
+                        if (input$fulldata) usecount <- NULL
+                        else usecount <- input$subset
+                        
+                        dataset <- datasets[[input$data]]
+                        parsed <- self$parse_dataset(dataset, outliers)
+                        plt1 <- ev$sample_dist(
                             parsed$sdf, 
                             color_col=as.factor(parsed$ddf[[input$cond]]), 
-                            title="Loess distribution", 
-                            max_count=input$subset)
+                            title=paste("Dataset:", input$data), 
+                            max_count=usecount)
+                        
+                        dataset2 <- datasets[[input$data2]]
+                        parsed2 <- self$parse_dataset(dataset2, outliers)
+                        plt2 <- ev$sample_dist(
+                            parsed2$sdf, 
+                            color_col=as.factor(parsed2$ddf[[input$cond2]]), 
+                            title=paste("Dataset:", input$data2), 
+                            max_count=usecount)
+                        
+                        grid.arrange(plt1, plt2)
                     })
                 },
                 options=list(height=height)
@@ -207,8 +225,6 @@ MyWidgets <- R6Class(
         
         clustering_widget = function(name, datasets, outlier_sets, height=1500, default_cond=NULL) {
             
-            plot_height <- 1200
-            
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
             dataset <- datasets[[1]]
@@ -295,11 +311,9 @@ MyWidgets <- R6Class(
         scatter_widgets = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
                                    fold_col="logFC", expr_col="AveExpr", height=1100) {
             
-            p_cols <- paste(contrasts, p_col, sep=".")
             dataset_names <- names(stat_data)
             default_name <- dataset_names[1]
-            dataset <- stat_data[[1]]
-            
+
             shinyApp(
                 ui = fluidPage(
                     selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
@@ -376,11 +390,9 @@ MyWidgets <- R6Class(
         venn_widgets = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
                                 fold_col="logFC", height=1100) {
             
-            p_cols <- paste(contrasts, p_col, sep=".")
             dataset_names <- names(stat_data)
             default_name <- dataset_names[1]
-            dataset <- stat_data[[1]]
-            
+
             shinyApp(
                 ui = fluidPage(
                     selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
@@ -421,8 +433,9 @@ MyWidgets <- R6Class(
                 ui = fluidPage(
                     selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
                     selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
+                    selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=NULL),
                     splitLayout(
-                        sliderInput("fdrthres", "FDR thres.", 0.1, min=0, max=1, step=0.01),
+                        sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
                         sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
                     ),
                     checkboxInput("exclusive", "Only show significant in all groups"),
@@ -435,22 +448,35 @@ MyWidgets <- R6Class(
                         
                         print(colnames(rowData(stat_data[[input$data]])))
                     
-                        unfiltered <- rowData(stat_data[[input$data]]) %>% 
-                            data.frame() %>% 
+                        retained <- rowData(stat_data[[input$data]]) %>% data.frame()
+
+                        if (length(input$filters) > 0) {
+                            
+                            if (input$exclusive) {
+                                unique_retained <- retained
+                                # Only include features passing all filters
+                                
+                                for (filter in input$filters) {
+                                    unique_retained <- unique_retained %>% filter(UQ(as.name(filter)) < input$filterthres)
+                                }
+                                retained <- unique_retained
+                            }
+                            else {
+                                all_retained <- NULL
+                                for (filter in input$filters) {
+                                    # Include features passing at least one filter
+                                    filter_retained <- retained %>% filter(UQ(as.name(filter)) < input$filterthres)
+                                    all_retained <- rbind(all_retained, filter_retained)
+                                }
+                                retained <- all_retained
+                            }
+                        }
+                        
+                        filtered_selected <- retained %>% 
                             select(input$fields) %>%
                             data.frame()
-                            # select(input$fields[order(match(input$fields, colnames(rowData(stat_data[[input$data]]))))])
-                        
-                        unfiltered
-                        
-                        # if (!input$exclusive) {
-                        #     unfiltered
-                        #         filter(batch1.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres | batch2.adj.P.Val < input$fdrthres)
-                        # }
-                        # else {
-                        #     unfiltered
-                        #         filter(batch1.adj.P.Val < input$fdrthres & batch2.adj.P.Val < input$fdrthres & batch3.adj.P.Val < input$fdrthres)
-                        # }
+
+                        filtered_selected
                     })
                     
                     observe({
