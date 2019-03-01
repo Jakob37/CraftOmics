@@ -1,6 +1,7 @@
 library(limma)
-library(R6)
 library(tidyverse)
+library(R6)
+library(wCorr)
 
 StatTools <- R6Class(
     public = list(
@@ -15,7 +16,7 @@ StatTools <- R6Class(
             corr_vals <- apply(df, 1, function(row) { cor(x=ref_levels, y=row, method=method, use="complete.obs") })
         },
 
-        calc_pearson_table = function(df, ref_levels, min_vals=4) {
+        calc_pearson_table = function(df, ref_levels, min_vals=4, weights=NULL) {
 
             cor.test.na <- function(...) {
                 res <- try(cor.test(...), silent=TRUE)
@@ -25,14 +26,37 @@ StatTools <- R6Class(
             corr_vals <- apply(df, 1, function(row) {
                 ifelse(length(which(!is.na(row))) < min_vals, NA, cor(x=row, y=ref_levels, method="pearson", use="complete.obs"))
             })
+            
+            if (!is.null(weights)) {
+                    weighted_corr_vals <- apply(
+                        df, 
+                        1, 
+                        function(row) {
+                        ifelse(
+                            length(which(!is.na(row))) < min_vals, 
+                            NA, 
+                            wCorr::weightedCorr(
+                                x=row[!is.na(row)], 
+                                y=ref_levels[!is.na(row)], 
+                                method="pearson", 
+                                weights=weights[!is.na(row)])
+                        )
+                    }
+                )
+            }
+            
             corr_ps <- apply(df, 1, function(row) {
                 ifelse(length(which(!is.na(row))) < min_vals, NA, cor.test.na(x=row, y=ref_levels, method="pearson", use="complete.obs"))
             })
             corr_qs <- p.adjust(corr_ps)
 
-            print(paste("Correlation calculated for", length(corr_vals), "values with successful t-test for", length(which(!is.na(corr_ps)))))
+            status_message <- paste("Total features:", length(corr_vals), "values with successful t-test", length(which(!is.na(corr_ps))))
+            if (!is.null(weights)) {
+                status_message <- paste(status_message, "Weighted correlation calculated for:", length(which(!is.na(weighted_corr_vals))))
+            }
+            message(status_message)
 
-            cbind(pearson_corr=corr_vals, pearson_p=corr_ps, pearson_q=corr_qs)
+            cbind(pearson_corr=corr_vals, weighted_pearson_corr=weighted_corr_vals, pearson_p=corr_ps, pearson_q=corr_qs)
         },
 
         reduce_technical_replicates_for_matrices = function(dataMat, designMat, techRepGroups) {

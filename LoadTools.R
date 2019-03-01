@@ -42,6 +42,29 @@ LoadTools <- R6Class(
                 colData=ddf,
                 rowData=adf
             )
+        },
+        
+        write_derep_matrices = function(rdf, ddf, out_data_path, namecol, techrepcol, out_design_path=NULL, trim_na_col=NULL) {
+            
+            if (!is.null(trim_na_col)) {
+                trimmed_rdf <- rdf %>% filter(!is.na(UQ(as.name(trim_na_col))))
+                message("Trimmed before and after counts: ", nrow(rdf), ", ", nrow(trimmed_rdf))
+                rdf <- trimmed_rdf
+            }
+            
+            sdf <- rdf %>% select(as.character(ddf[[namecol]]))
+            adf <- rdf %>% select(-one_of(as.character(ddf[[namecol]])))
+            red_mats <- st$reduce_technical_replicates_for_matrices(designMat = ddf, dataMat = sdf, ddf[[techrepcol]])
+            message("Writing ", nrow(red_mats$data), " to ", out_data_path)
+            write_tsv(cbind(adf, data.frame(red_mats$data)), path=out_data_path)
+            if (!is.null(out_design_path)) {
+                message("Writing ", nrow(red_mats$design), " to ", out_design_path)
+                write_tsv(red_mats$design, path=out_design_path)
+            }
+        },
+        
+        make_ses = function() {
+            
         }
     )
 )

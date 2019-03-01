@@ -251,7 +251,7 @@ MyWidgets <- R6Class(
                         parsed <- self$parse_dataset(dataset, outliers)
                         mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]]))
                         
-                    }, height = plot_height)
+                    }, height = 1200)
                 },
                 options = list(height=height)
             )
@@ -420,7 +420,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        table_widget = function(name, stat_data, height=1000, default_selected=NULL) {
+        table_widget = function(name, stat_data, height=1000, default_selected=NULL, default_filter=NULL) {
             
             if (is.null(default_selected)) {
                 default_selected <- colnames(rowData(stat_data[[1]]))
@@ -433,7 +433,7 @@ MyWidgets <- R6Class(
                 ui = fluidPage(
                     selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
                     selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
-                    selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=NULL),
+                    selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_filter),
                     splitLayout(
                         sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
                         sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
@@ -446,16 +446,13 @@ MyWidgets <- R6Class(
                     
                     thedata <- reactive({
                         
-                        print(colnames(rowData(stat_data[[input$data]])))
-                    
                         retained <- rowData(stat_data[[input$data]]) %>% data.frame()
-
                         if (length(input$filters) > 0) {
                             
                             if (input$exclusive) {
                                 unique_retained <- retained
-                                # Only include features passing all filters
                                 
+                                # Only include features passing all filters
                                 for (filter in input$filters) {
                                     unique_retained <- unique_retained %>% filter(UQ(as.name(filter)) < input$filterthres)
                                 }
@@ -468,7 +465,7 @@ MyWidgets <- R6Class(
                                     filter_retained <- retained %>% filter(UQ(as.name(filter)) < input$filterthres)
                                     all_retained <- rbind(all_retained, filter_retained)
                                 }
-                                retained <- all_retained
+                                retained <- all_retained %>% distinct()
                             }
                         }
                         
@@ -513,7 +510,8 @@ MyWidgets <- R6Class(
             
         },
         spotcheck_widget = function(name, stat_data, id_col, split_col, split_vals, contrast_cond,
-                                    height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL) {
+                                    height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
+                                    data_names=c("Group 1", "Group 2", "Group 3")) {
             
             if (is.null(default_data)) {
                 default_data <- colnames(rowData(stat_data[[1]]))
@@ -540,29 +538,43 @@ MyWidgets <- R6Class(
                     selectInput("rowid", "Row ID", selected=default_gene, choices = row_ids),
                     selectInput("color", "Coloring category", selected=color_cond, choices = colnames(colData(dataset))),
                     checkboxInput("colorscatter", "Color boxplot scatter on cond"),
+                    checkboxInput("showlabels", "Show labels instead of scatter dots"),
                     plotOutput("scatters"),
                     plotOutput("contrast")
                 ),
                 server = function(input, output) {
                     output$scatters = renderPlot({
                         
+                        if (is.null(corr_col)) {
+                            return()
+                        }
+                        
                         se <- stat_data[[input$data]]
                         target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
                         make_scatter <- function(row_ses, title) {
-                            fert_vals <- colData(row_ses)$Fertility
+                            fert_vals <- colData(row_ses)[[corr_col]]
                             expr_vals <- assay(row_ses)[1, ]
                             color <- colData(row_ses)[[input$color]]
-                            ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color), aes(expr, fert, color=color)) + 
-                                geom_point() +
+                            sample_names <- rownames(colData(row_ses))
+                            
+                            plt <- ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color, sample=sample_names), 
+                                   aes(expr, fert, color=color, label=sample)) + 
                                 xlab("Expression") +
                                 ylab("Fertility") +
                                 theme_classic() +
                                 ggtitle(title)
+                            
+                            if (!input$showlabels) {
+                                plt + geom_point()
+                            }
+                            else {
+                                plt + geom_text()
+                            }
                         }
                         
-                        b1_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[1]], "Batch 1")
-                        b2_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[2]], "Batch 2")
-                        b3_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[3]], "Batch 3")
+                        b1_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[1]], data_names[1])
+                        b2_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[2]], data_names[2])
+                        b3_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[3]], data_names[3])
                         
                         ggarrange(b1_plt, b2_plt, b3_plt, ncol=3, common.legend=TRUE, legend="bottom")
                     })
@@ -575,11 +587,26 @@ MyWidgets <- R6Class(
                         make_box <- function(row_ses, title) {
                             expr_vals <- assay(row_ses)[1, ]
                             high_fert <- colData(row_ses[1, ])[[contrast_cond]]
-                            stat_df <- data.frame(expr=expr_vals, high_fert=high_fert, color=colData(row_ses[1, ])[[input$color]])
-                            plt <- ggplot(stat_df, aes(x=high_fert, y=expr_vals, fill=high_fert)) + geom_boxplot(alpha=0.5) + theme_classic()
+                            sample_names <- rownames(colData(row_ses))
+                            stat_df <- data.frame(
+                                expr=expr_vals, 
+                                high_fert=high_fert, 
+                                color=colData(row_ses[1, ])[[input$color]],
+                                sample_name=sample_names
+                            )
                             
-                            if (input$colorscatter) plt + geom_point(aes(color=color))
-                            else plt + geom_point()
+                            plt <- ggplot(
+                                stat_df, 
+                                aes(x=high_fert, y=expr_vals, fill=high_fert, label=sample_name)
+                                ) + 
+                                geom_boxplot(alpha=0.5) + 
+                                theme_classic()
+                            
+                            if (input$showlabels) target_geom <- geom_text
+                            else target_geom <- geom_point
+                            
+                            if (input$colorscatter) plt + target_geom(aes(color=color))
+                            else plt + target_geom()
                         }
                         
                         b1_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[1]], split_vals[1])
