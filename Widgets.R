@@ -154,7 +154,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        pca_widget = function(name, datasets, outlier_sets, height=1300, default_cond1=NULL, default_cond2=NULL) {
+        pca_widget = function(name, datasets, outlier_sets, height=1300, default_cond1=NULL, default_cond2=NULL, default_text="Sample") {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -175,7 +175,10 @@ MyWidgets <- R6Class(
                         checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL)
                     ),
                     splitLayout(
-                        checkboxInput("as_label", "Show as text"),
+                        fluidPage(
+                            checkboxInput("as_label", "Show as text"),
+                            selectInput("text_labels", "Text labels:", selected=default_text, choices=colnames(colData(dataset)))
+                        ),
                         numericInput("pc_comps", "Max PCs in Scree", value=6, min=1)
                     ),
                     splitLayout(
@@ -199,12 +202,19 @@ MyWidgets <- R6Class(
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
                         parsed <- self$parse_dataset(dataset, outliers)
                         
+                        if (!input$as_label) {
+                            label <- NULL
+                        }
+                        else {
+                            label <- colData(dataset)[, input$text_labels]
+                        }
+                        
                         title1 <- paste0("Cond: ", input$cond_plt1, " PCs: ", input$pc1_plt1, ", ", input$pc2_plt1)
                         plt1 <- mv$pca(
                             parsed$sdf, 
                             as.factor(parsed$ddf[[input$cond_plt1]]), 
                             pcs=c(as.numeric(input$pc1_plt1), as.numeric(input$pc2_plt1)), 
-                            label=input$as_label) + 
+                            label=label) + 
                                 ggtitle(title1)
                         
                         title2 <- paste0("Cond: ", input$cond_plt2, " PCs: ", input$pc1_plt2, ", ", input$pc2_plt2)
@@ -212,7 +222,7 @@ MyWidgets <- R6Class(
                             parsed$sdf, 
                             as.factor(parsed$ddf[[input$cond_plt2]]), 
                             pcs=c(as.numeric(input$pc1_plt2), as.numeric(input$pc2_plt2)), 
-                            label=input$as_label) + 
+                            label=label) + 
                                 ggtitle(title2)
                         
                         scree <- mv$plot_component_fraction(parsed$sdf, max_comps=input$pc_comps)
@@ -511,7 +521,7 @@ MyWidgets <- R6Class(
         },
         spotcheck_widget = function(name, stat_data, id_col, split_col, split_vals, contrast_cond,
                                     height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
-                                    data_names=c("Group 1", "Group 2", "Group 3")) {
+                                    data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL) {
             
             if (is.null(default_data)) {
                 default_data <- colnames(rowData(stat_data[[1]]))
@@ -526,19 +536,24 @@ MyWidgets <- R6Class(
             }
             
             dataset_names <- names(stat_data)
-            default_name <- dataset_names[1]
+            # default_name <- dataset_names[1]
             dataset <- stat_data[[1]]
             row_ids <- rowData(dataset)[[id_col]]
             
-            # selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
-            
             shinyApp(
                 ui = fluidPage(
-                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                    splitLayout(
+                        selectInput("data", "Dataset:", selected=default_data, choices=dataset_names),
+                        selectInput("color", "Coloring category", selected=color_cond, choices = colnames(colData(dataset)))
+                    ),
                     selectInput("rowid", "Row ID", selected=default_gene, choices = row_ids),
-                    selectInput("color", "Coloring category", selected=color_cond, choices = colnames(colData(dataset))),
-                    checkboxInput("colorscatter", "Color boxplot scatter on cond"),
-                    checkboxInput("showlabels", "Show labels instead of scatter dots"),
+                    splitLayout(
+                        fluidPage(
+                            checkboxInput("colorscatter", "Color boxplot scatter on cond"),
+                            checkboxInput("showlabels", "Show labels instead of scatter dots")
+                        ),
+                        checkboxGroupInput("outliers", "Remove group", choices=names(outlier_sets), selected=NULL)
+                    ),
                     plotOutput("scatters"),
                     plotOutput("contrast")
                 ),
@@ -551,6 +566,11 @@ MyWidgets <- R6Class(
                         
                         se <- stat_data[[input$data]]
                         target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        
+                        outliers <- unname(unlist(outlier_sets[input$outliers]))
+                        non_outliers <- colnames(target)[!colnames(target) %in% outliers]
+                        target <- target[, non_outliers]
+                        
                         make_scatter <- function(row_ses, title) {
                             fert_vals <- colData(row_ses)[[corr_col]]
                             expr_vals <- assay(row_ses)[1, ]
@@ -583,6 +603,10 @@ MyWidgets <- R6Class(
                         
                         se <- stat_data[[input$data]]
                         target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        
+                        outliers <- unname(unlist(outlier_sets[input$outliers]))
+                        non_outliers <- colnames(target)[!colnames(target) %in% outliers]
+                        target <- target[, non_outliers]
                         
                         make_box <- function(row_ses, title) {
                             expr_vals <- assay(row_ses)[1, ]

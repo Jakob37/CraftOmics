@@ -16,7 +16,7 @@ MultivarVis <- R6Class(
             plt
         },
         
-        pca = function(expr_m, color_factor, title="PCA", pcs=c(1,2), label=FALSE) {
+        pca = function(expr_m, color_factor, title="PCA", pcs=c(1,2), label=NULL) {
 
             # Inspired by:
             # https://cran.r-project.org/web/packages/ggfortify/vignettes/plot_pca.html
@@ -24,18 +24,24 @@ MultivarVis <- R6Class(
             expr_m_nona <- expr_m[complete.cases(expr_m), ]
             pca_obj <- prcomp(t(expr_m_nona), scale=TRUE, center=TRUE)
             style_df <- data.frame(color=color_factor)
+            
+            if (!is.null(label)) {
+                rownames(style_df) <- make.names(label, unique=TRUE)
+            }
 
-            if (!label) shape <- NULL else shape <- FALSE
+            if (is.null(label)) shape <- NULL else shape <- FALSE
 
             plt <- autoplot(
                 pca_obj, 
                 data=style_df, 
                 colour="color", 
-                label=label, 
+                label=!is.null(label), 
                 shape=shape,
                 loadings=FALSE, 
-                loadings.label=FALSE, x=pcs[1], y=pcs[2]) + 
-                    ggtitle(title)
+                loadings.label=FALSE, 
+                x=pcs[1], 
+                y=pcs[2]
+            ) + ggtitle(title)
             
             plt <- self$style_plt(plt)
             return(plt)
