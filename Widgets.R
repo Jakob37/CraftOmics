@@ -206,7 +206,7 @@ MyWidgets <- R6Class(
                             label <- NULL
                         }
                         else {
-                            label <- colData(dataset)[, input$text_labels]
+                            label <- parsed$ddf[, input$text_labels]
                         }
                         
                         title1 <- paste0("Cond: ", input$cond_plt1, " PCs: ", input$pc1_plt1, ", ", input$pc2_plt1)
@@ -521,7 +521,7 @@ MyWidgets <- R6Class(
         },
         spotcheck_widget = function(name, stat_data, id_col, split_col, split_vals, contrast_cond,
                                     height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
-                                    data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL) {
+                                    data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL, default_label=NULL) {
             
             if (is.null(default_data)) {
                 default_data <- colnames(rowData(stat_data[[1]]))
@@ -542,11 +542,15 @@ MyWidgets <- R6Class(
             
             shinyApp(
                 ui = fluidPage(
+                    tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     splitLayout(
                         selectInput("data", "Dataset:", selected=default_data, choices=dataset_names),
                         selectInput("color", "Coloring category", selected=color_cond, choices = colnames(colData(dataset)))
                     ),
-                    selectInput("rowid", "Row ID", selected=default_gene, choices = row_ids),
+                    splitLayout(
+                        selectInput("rowid", "Row ID", selected=default_gene, choices = row_ids),
+                        selectInput("label_type", "Label category", selected=default_label, choices=colnames(colData(dataset)))
+                    ),
                     splitLayout(
                         fluidPage(
                             checkboxInput("colorscatter", "Color boxplot scatter on cond"),
@@ -575,10 +579,10 @@ MyWidgets <- R6Class(
                             fert_vals <- colData(row_ses)[[corr_col]]
                             expr_vals <- assay(row_ses)[1, ]
                             color <- colData(row_ses)[[input$color]]
-                            sample_names <- rownames(colData(row_ses))
+                            label_names <- colData(row_ses)[, input$label_type]
                             
-                            plt <- ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color, sample=sample_names), 
-                                   aes(expr, fert, color=color, label=sample)) + 
+                            plt <- ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color, label=label_names), 
+                                   aes(expr, fert, color=color, label=label)) + 
                                 xlab("Expression") +
                                 ylab("Fertility") +
                                 theme_classic() +
@@ -611,17 +615,19 @@ MyWidgets <- R6Class(
                         make_box <- function(row_ses, title) {
                             expr_vals <- assay(row_ses)[1, ]
                             high_fert <- colData(row_ses[1, ])[[contrast_cond]]
-                            sample_names <- rownames(colData(row_ses))
+                            label_names <- colData(row_ses)[, input$label_type]
+                            # sample_names <- rownames(colData(row_ses))
+                            
                             stat_df <- data.frame(
                                 expr=expr_vals, 
                                 high_fert=high_fert, 
                                 color=colData(row_ses[1, ])[[input$color]],
-                                sample_name=sample_names
+                                labels=label_names
                             )
                             
                             plt <- ggplot(
                                 stat_df, 
-                                aes(x=high_fert, y=expr_vals, fill=high_fert, label=sample_name)
+                                aes(x=high_fert, y=expr_vals, fill=high_fert, label=labels)
                                 ) + 
                                 geom_boxplot(alpha=0.5) + 
                                 theme_classic()
