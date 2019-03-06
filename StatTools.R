@@ -98,11 +98,11 @@ StatTools <- R6Class(
             length(rep_counts) == length(unique(groups)) && min(rep_counts) >= min_count
         },
         
-        contrasts = function(data_m, conditions, contrasts, verbose=FALSE) {
+        contrasts = function(data_m, conditions, contrasts, verbose=FALSE, batch_factor=NULL) {
             
             stat_tables <- lapply(contrasts, function(contr){
                 if (verbose) print(paste("Calculating: ", paste(contr, collapse=", ")))
-                tabl <- self$contrast(data_m, conditions, contr, verbose=verbose)
+                tabl <- self$contrast(data_m, conditions, contr, verbose=verbose, batch_factor=batch_factor)
                 tabl
             })
         },
@@ -114,17 +114,14 @@ StatTools <- R6Class(
                 stop("Need to assign either neither or both variables 'filter_factor' and 'filter_level'")
             }
 
-            Variable <- factor(level_factor)
-
             if (!is.null(filter_factor)) {
-                Filter <- factor(filter_factor)
-                VariableAndFilter <- paste(Variable, Filter, sep=".")
-                Variable <- factor(VariableAndFilter)
-                contrast_levels <- paste(target_levels, filter_level, sep=".")
+                target_samples <- filter_factor == filter_level
+                data_m <- data_m[, target_samples]
+                level_factor <- level_factor[target_samples]
             }
-            else {
-                contrast_levels <- target_levels
-            }
+            
+            Variable <- factor(level_factor)
+            contrast_levels <- target_levels
 
             if (is.null(batch_factor)) {
                 model <- ~0+Variable
@@ -134,13 +131,7 @@ StatTools <- R6Class(
                 model <- ~0+Variable+Batch
             }
 
-            if (is.null(filter_factor)) {
-                my_contrast <- paste0("Variable", target_levels[1], "-", "Variable", target_levels[2])
-            }
-            else {
-                my_contrast <- paste0("Variable", target_levels[1], ".", filter_level, "-", "Variable", target_levels[2], ".", filter_level)
-            }
-
+            my_contrast <- paste0("Variable", target_levels[1], "-", "Variable", target_levels[2])
             design <- model.matrix(model)
 
             if (type == "limma") {

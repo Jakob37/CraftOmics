@@ -103,7 +103,7 @@ SignificanceTableVis <- R6Class(
                         ggplot2::scale_colour_manual(values = c('cornflowerblue', 'firebrick', 'gold'), guide = FALSE) +
                         ggplot2::labs(fill = NULL) +
                         ggplot2::annotate("text", x = df.vdc$x, y = df.vdc$y, label = df.vdc$label, size = 5) +
-                        ggplot2::ggtitle(paste0(sig_col, " < ", sig_thres, 
+                        ggplot2::ggtitle(paste0(base_sig_col, " < ", sig_thres, 
                                                 ", |log2 fold| >= ", log2_fold_thres))
                     
                     index <- index + 1

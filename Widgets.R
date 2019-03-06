@@ -576,6 +576,7 @@ MyWidgets <- R6Class(
                         target <- target[, non_outliers]
                         
                         make_scatter <- function(row_ses, title) {
+                            
                             fert_vals <- colData(row_ses)[[corr_col]]
                             expr_vals <- assay(row_ses)[1, ]
                             color <- colData(row_ses)[[input$color]]
@@ -648,15 +649,18 @@ MyWidgets <- R6Class(
                 },
                 options=list(height=height)
             )
-            
-            
         },
-        parse_dataset = function(dataset, outliers) {
+        parse_dataset = function(dataset, outliers, target_assay=1) {
+            
+            if (typeof(target_assay) == "character" && !(target_assay %in% names(assays(dataset)))) {
+                stop("Unknown character target_assay: ", target_assay)
+            }
+            
             non_outliers <- colnames(dataset)[!colnames(dataset) %in% outliers]
-            sdf <- assay(dataset)[, non_outliers]
+            sdf <- assays(dataset)[[target_assay]][, non_outliers]
             ddf <- data.frame(colData(dataset)) %>% filter(sample %in% non_outliers)
-            rdf <- rowData(dataset) %>% data.frame()
-            list("sdf"=sdf, "ddf"=ddf, "rdf"=rdf)
+            adf <- rowData(dataset) %>% data.frame()
+            list("sdf"=sdf, "ddf"=ddf, "adf"=adf)
         }
     ),
     private = list(
