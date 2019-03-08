@@ -44,6 +44,34 @@ LoadTools <- R6Class(
             )
         },
         
+        split_dataset = function(data_fp, design_fp, split1_data_fp, split1_design_fp, 
+                       split2_data_fp, split2_design_fp, sample_col, split_col) {
+            
+            rdf <- read_tsv(data_fp)
+            ddf <- read_tsv(design_fp)
+            sdf <- rdf %>% select(one_of(ddf[[sample_col]]))
+            adf <- rdf %>% select(-one_of(ddf[[sample_col]]))
+            
+            split_levels <- unique(ddf[[split_col]])
+            if (length(split_levels) != 2) {
+                stop("This function is designed for two split levels, found: ", paste(split_levels, collapse=", "))
+            }
+            
+            s1_ddf <- ddf %>% filter(UQ(as.name(split_col)) == split_levels[1]) %>% data.frame()
+            s2_ddf <- ddf %>% filter(UQ(as.name(split_col)) == split_levels[2]) %>% data.frame()
+            
+            s1_sdf <- sdf %>% select(s1_ddf[[sample_col]])
+            s2_sdf <- sdf %>% select(s2_ddf[[sample_col]])
+            
+            s1_rdf <- cbind(adf, s1_sdf)
+            s2_rdf <- cbind(adf, s2_sdf)
+            
+            write_tsv(s1_rdf, path=split1_data_fp)
+            write_tsv(s1_ddf, path=split1_design_fp)
+            write_tsv(s2_rdf, path=split2_data_fp)
+            write_tsv(s2_ddf, path=split2_design_fp)
+        },
+        
         write_derep_matrices = function(rdf, ddf, out_data_path, namecol, techrepcol, out_design_path=NULL, trim_na_col=NULL) {
             
             if (!is.null(trim_na_col)) {
