@@ -1,4 +1,6 @@
 library(R6)
+library(outliers)
+library(tidyverse)
 
 ProteinRollup <- R6Class(
     public = list(
@@ -58,26 +60,75 @@ ProteinRollup <- R6Class(
             df
         },
         
-        # Inspired by DANTE and pmartR
-        protein_rollup = function(pep_ids, protein_ids, pep_mat, rollup_func=self$zrollup) {
+        protein_rollup_on_matrix = function(design_fp, data_fp, protein_col, peptide_col, sample_col, out_fp, rollup_func=self$rrollup) {
             
-            pep_expression <- cbind(pep_ids, pep_mat)
-            prot_expression <- cbind(protein_ids, pep_mat)
-            protein_map <- cbind(pep_ids, protein_ids)
+            ddf <- read_tsv(design_fp)
+            raw_rdf <- read_tsv(data_fp)
+            # adf <- rdf %>% select(-one_of(ddf[[sample_col]]))
+            rdf <- raw_rdf %>% filter(!is.na(UQ(as.name(protein_col))))
+            
+            trimmed_count <- nrow(raw_rdf) - nrow(rdf)
+            if (trimmed_count != 0) {
+                message("Trimmed ", , " proteins with missing IDs")
+            }
+            
+            sdf <- rdf %>% select(one_of(ddf[[sample_col]]))
+            
+            protein_data <- rdf %>% select(protein_col) %>% unlist()
+            peptide_data <- rdf %>% select(peptide_col) %>% unlist()
+
+            message("Performing rollup for ", length(peptide_data), " peptides to ", length(unique(protein_data)), " proteins")
+            
+            prot_sdf <- self$protein_rollup(peptide_data, protein_data, as.matrix(sdf), rollup_func=rollup_func)
+            write_tsv(prot_sdf, path=out_fp)
+        },
+        
+        # Inspired by DANTE and pmartR
+        protein_rollup = function(pep_ids, protein_ids, pep_mat, rollup_func=self$rrollup) {
+            
+            # pep_expression <- cbind(pep_ids, pep_mat)
+            # prot_expression <- cbind(protein_ids, pep_mat)
+            protein_map <- cbind(protein_ids, pep_ids)
             
             unique_proteins <- unique(protein_ids)
+            pep_counts <- list()
 
             pep_results <- list()
             for (protein in unique_proteins) {
                 
                 row_inds <- which(protein_ids == protein)
-                current_peps_only <- pep_mat[row_inds, ]
+                current_peps_only <- pep_mat[row_inds, , drop=FALSE]
                 
                 scaled_peps <- rollup_func(current_peps_only)
                 pep_results[[protein]] <- scaled_peps
+                pep_counts[[protein]] <- nrow(current_peps_only)
             }
+            # browser()
+            cbind(Protein=unique_proteins, Peptides=unlist(pep_counts), data.frame(do.call("rbind", pep_results)))
+        },
+        
+        # Based on InfernoRDN
+        # https://github.com/PNNL-Comp-Mass-Spec/InfernoRDN/blob/master/Rscripts/Rollup/RRollup.R
+        remove_outliers = function(pep_mat, minPs=5, pvalue_thres=0.05) {
             
-            do.call("rbind", pep_results)
+            xPeptideCount <- colSums(!is.na(pep_mat))
+            
+            for (sample_i in 1:dim(pep_mat)[2]) {
+                if (xPeptideCount[sample_i] >= minPs) {
+                    
+                    # Repeat the outlier check until none are classified as outliers
+                    repeat {
+                        grubbs <- outliers::grubbs.test(pep_mat[, sample_i])
+                        if ( (grubbs$p.value < pvalue_thres) && (!is.nan(grubbs$statistic[2])) && grubbs$statistic[2] != 0) {
+                            # Fill outlier with median value
+                            pep_mat[, sample_i] <- outliers::rm.outlier.1(pep_mat[, sample_i], fill=TRUE, median=TRUE)
+                        }
+                        else {
+                            break
+                        }
+                    }
+                }
+            }
         },
         
         zrollup = function(peptides, combine_func=median) {
@@ -99,9 +150,10 @@ ProteinRollup <- R6Class(
         },
         
         rrollup = function(peptides, combine_func=median) {
-            warning("Relatively untested, and no Grubbs outlier test performed")
+            # warning("Relatively untested, and no Grubbs outlier test performed")
             
             num_peps <- nrow(peptides)
+            # message(num_peps)
             #res <- matrix(NA, nrow=1, ncol=ncol(peptides))
             
             if (num_peps == 1) {
@@ -114,7 +166,7 @@ ProteinRollup <- R6Class(
                 
                 # If tied, select with highest median abundance
                 if (length(least.na) > 1) {
-                    mds <- matrixStats::rowMedian(peptides, na.rm=TRUE)[least.na, ]
+                    mds <- matrixStats::rowMedians(peptides, na.rm=TRUE)[least.na]
                     least.na <- least.na[which(mds == max(mds))]
                 }
                 prot_val <- unlist(peptides[least.na, ])
@@ -122,11 +174,15 @@ ProteinRollup <- R6Class(
                 # 2. Ratio all peptides to the reference
                 # Since data is on log scale this is the difference (?)
                 ref_ratios <- matrix(prot_val, nrow=num_peps, ncol=ncol(peptides), byrow=TRUE) - peptides
+                
+                # browser()
                 scaling_factor <- matrixStats::rowMedians(ref_ratios, na.rm=TRUE)
                 
                 # 3. Use median of ratio as scaling factor for each peptide
                 x_scaled <- peptides + matrix(scaling_factor, nrow=num_peps, ncol=ncol(peptides))
+
                 
+                                
                 # 4. Set abundance as median peptide abundance
                 protein_val <- apply(x_scaled, 2, combine_func, na.rm=TRUE)
             }
@@ -164,7 +220,69 @@ ProteinRollup <- R6Class(
             }
         }
     ),
-    private = list()
+    private = list(
+        rollup.score = function(currPepSel, currProtSel, method) {
+            
+            N1 <- dim(currPepSel)[1]
+            N2 <- dim(currPepSel)[2]
+            pepCorr <- rep(numeric(0),N1)
+            ws <- rep(numeric(0),N1)
+            
+            for(i in 1:N1)#finds correlation values between each peptide profile and calculated protein profile
+            {
+                ws[i] <- sum(!is.na(currPepSel[i,]))/N2
+                if(method=="pearson")
+                    pepCorr[i] <- cor(as.vector(currPepSel[i,]), as.vector(currProtSel), use="pairwise.complete.obs")
+                else if(method=="kendall")
+                    pepCorr[i] <- cor(as.vector(currPepSel[i,]), as.vector(currProtSel), use="pairwise.complete.obs",
+                                      method="kendall")
+                else
+                    pepCorr[i] <- cor(as.vector(currPepSel[i,]), as.vector(currProtSel), use="pairwise.complete.obs",
+                                      method="spearman")
+            }
+            #meanCorr <- mean(pepCorr, na.rm=TRUE) #mean correlation value for each protein
+            meanCorr <- weighted.mean(pepCorr, ws, na.rm=TRUE) #mean correlation value for each protein
+            Penalty1 <- 1-1/N1
+            #Penalty2 <- sum(!is.na(currPepSel))/(N1*N2)
+            #Score <- meanCorr * Penalty1 * Penalty2
+            Score <- meanCorr * Penalty1
+            
+            out <- Score
+            return(out)
+        },
+        
+        dante_remove.outliers = function(Data, minPs=5, pvalue=0.05)
+            # internal function used by normalize.proteins()
+            # Calculates the protein abundances after removing outliers
+            # Depends on package "outliers"
+        {
+            # library(outliers)
+            # ColNames = colnames(Data)
+            xPeptideCount <- colSums(!is.na(Data))
+            for (i in 1:dim(Data)[2])
+            {
+                if (xPeptideCount[i] >= minPs)
+                {
+                    repeat
+                    {
+                        grubbs <- grubbs.test(Data[,i]) # Grubb's test
+                        if ( (grubbs$p.value < pvalue) && (!is.nan(grubbs$statistic[2])) &&
+                             (grubbs$statistic[2] != 0) ) # pass the p-value cutoff
+                        {
+                            Data[,i] <- rm.outlier(Data[,i], fill=TRUE, median=TRUE)
+                            # fill the outlier with the median value
+                        }
+                        else { break }
+                    }
+                }
+            }
+            return(Data)
+        },
+        
+        rm.outlier = function(data, fill, median) {
+            
+        }
+    )
 )
 
 
