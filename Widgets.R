@@ -6,7 +6,7 @@ library(gridExtra)
 
 MyWidgets <- R6Class(
     public = list(
-        density_widget = function(name, datasets, outlier_sets, height=800, default_cond=NULL) {
+        density_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -32,7 +32,7 @@ MyWidgets <- R6Class(
                     checkboxInput("fulldata", "Use full data", value = FALSE),
                     plotOutput("qq")
                 ),
-                server = function(input, output) {
+                server = function(session, input, output) {
                     output$qq = renderPlot({
                         
                         outliers <- unname(unlist(outlier_sets[input$checkgroup]))
@@ -58,12 +58,32 @@ MyWidgets <- R6Class(
                         
                         grid.arrange(plt1, plt2)
                     })
+                    
+                    observe({
+                        d1_choices <- colnames(colData(datasets[[input$data]]))
+                        updateSelectInput(
+                            session,
+                            "cond",
+                            choices=d1_choices,
+                            selected=colnames(colData(datasets[[input$data]]))[1]
+                        )
+                    })
+                    
+                    observe({
+                        d2_choices <- colnames(colData(datasets[[input$data2]]))
+                        updateSelectInput(
+                            session,
+                            "cond2",
+                            choices=d2_choices,
+                            selected=colnames(colData(datasets[[input$data2]]))[1]
+                        )
+                    })
                 },
                 options=list(height=height)
             )
         },
         
-        total_intensity_widget = function(name, datasets, outlier_sets, height=800, default_cond=NULL) {
+        total_intensity_widget = function(datasets, outlier_sets, height=800, default_cond=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -99,7 +119,7 @@ MyWidgets <- R6Class(
                         plt <- ev$abundance_bars(
                             parsed$sdf, 
                             color_col=as.factor(parsed$ddf[[input$cond]]), 
-                            title=name, 
+                            title="Bars", 
                             show_missing=input$show_na, 
                             show_average=input$show_mean)
                         plt
@@ -109,7 +129,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        qq_widget = function(name, datasets, outlier_sets, height=800, default_cond=NULL) {
+        qq_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -142,7 +162,7 @@ MyWidgets <- R6Class(
                         
                         plt <- ev$qq(
                             parsed$sdf, 
-                            title=name, 
+                            title="QQ", 
                             max_count=input$subset, 
                             cond_col=parsed$ddf[[input$cond]]
                         )
@@ -154,7 +174,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        pca_widget = function(name, datasets, outlier_sets, height=1300, default_cond1=NULL, default_cond2=NULL, default_text="Sample") {
+        pca_widget = function(datasets, outlier_sets=NULL, height=1300, default_cond1=NULL, default_cond2=NULL, default_text="Sample") {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -195,7 +215,7 @@ MyWidgets <- R6Class(
                     ),
                     plotOutput("pca")
                 ),
-                server = function(input, output) {
+                server = function(session, input, output) {
                     output$pca = renderPlot({
                         
                         dataset <- datasets[[input$data]]
@@ -215,7 +235,7 @@ MyWidgets <- R6Class(
                             as.factor(parsed$ddf[[input$cond_plt1]]), 
                             pcs=c(as.numeric(input$pc1_plt1), as.numeric(input$pc2_plt1)), 
                             label=label) + 
-                                ggtitle(title1)
+                                ggtitle(title1) + labs(color=input$cond_plt1)
                         
                         title2 <- paste0("Cond: ", input$cond_plt2, " PCs: ", input$pc1_plt2, ", ", input$pc2_plt2)
                         plt2 <- mv$pca(
@@ -223,17 +243,35 @@ MyWidgets <- R6Class(
                             as.factor(parsed$ddf[[input$cond_plt2]]), 
                             pcs=c(as.numeric(input$pc1_plt2), as.numeric(input$pc2_plt2)), 
                             label=label) + 
-                                ggtitle(title2)
+                                ggtitle(title2) + labs(color=input$cond_plt1)
                         
                         scree <- mv$plot_component_fraction(parsed$sdf, max_comps=input$pc_comps)
                         grid.arrange(plt1, plt2, scree, ncol=2)
                     }, height = 800)
+                    
+                    observe({
+                        cond_choices <- colnames(colData(datasets[[input$data]]))
+                        
+                        selected_1 <- input$cond_plt1
+                        selected_2 <- input$cond_plt2
+                        
+                        if (!selected_1 %in% cond_choices) {
+                            selected_1 <- cond_choices[1]
+                        }
+                        
+                        if (!selected_2 %in% cond_choices) {
+                            selected_2 <- cond_choices[1]
+                        }
+                        
+                        updateSelectInput(session, "cond_plt1", choices=cond_choices, selected=selected_1)
+                        updateSelectInput(session, "cond_plt2", choices=cond_choices, selected=selected_2)
+                    })
                 },
                 options = list(height=height)
             )
         },
         
-        clustering_widget = function(name, datasets, outlier_sets, height=1500, default_cond=NULL) {
+        clustering_widget = function(datasets, outlier_sets, height=1500, default_cond=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -267,36 +305,45 @@ MyWidgets <- R6Class(
             )
         },
         
-        hists_widget = function(name, stat_data, contrasts, show_cols=c("P.Value", "adj.P.Val", "logFC", "AveExpr"), height=1000) {
+        hists_widget = function(stat_data, contrast_suffix, show_cols=c("P.Value", "adj.P.Val", "logFC", "AveExpr"), height=1000) {
             
             dataset_names <- names(stat_data)
             default_name <- dataset_names[1]
-
+            
             shinyApp(
                 ui = fluidPage(
                     selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
                     numericInput("bins", "Bin count", value=50, min=1, max=100),
                     selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
-                    checkboxInput("scaleaxis", "Scale Y axes"),
+                    splitLayout(
+                        checkboxInput("scaleaxis", "Scale Y axes"),
+                        checkboxInput("limitxaxis", "Limit X axes")
+                    ),
                     plotOutput("plots", height=200)
                 ),
                 server = function(input, output) {
                     
                     output$plots = renderPlot({
                         
-                        rdf <- data.frame(rowData(stat_data[[input$data]]))
+                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
+                                                
+                        rdf <- data.frame(rowData(stat_data[[input$data]]), stringsAsFactors = FALSE)
                         plts <- list()
                         for (contrast in contrasts) {
                             
                             target_col <- paste(contrast, input$target_col, sep=".")
-                            xmin <- min(rdf[[target_col]])
-                            xmax <- max(rdf[[target_col]])
                             
                             plt <- ev$pvalhist(rdf[[target_col]], na.rm=TRUE, bincount=input$bins) +
                                 theme_classic() +
                                 scale_fill_brewer(palette="Dark2") +
-                                ggtitle(contrast) + 
-                                xlim(xmin, xmax)
+                                ggtitle(contrast) 
+
+                            if (input$limitxaxis) {
+                                xmin <- min(as.numeric(rdf[[target_col]]), na.rm = TRUE) - 0.01
+                                xmax <- max(as.numeric(rdf[[target_col]]), na.rm = TRUE) + 0.01
+                                plt <- plt + xlim(xmin, xmax)
+                            }
+                            
                             plts[[contrast]] <- plt
                         }
                         
@@ -304,7 +351,7 @@ MyWidgets <- R6Class(
                             max_y_vals <- lapply(plts, function(plt) {
                                 layer_scales(plt)$y$range$range[2]
                             })
-
+                            
                             plts <- lapply(plts, function(plt) {
                                 plt <- plt + 
                                     ylim(0, 1.01 * max(unlist(max_y_vals)))
@@ -318,7 +365,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        scatter_widgets = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
+        scatter_widgets = function(stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
                                    fold_col="logFC", expr_col="AveExpr", height=1100) {
             
             dataset_names <- names(stat_data)
@@ -397,7 +444,7 @@ MyWidgets <- R6Class(
                 options=list(height=height)
             )
         },
-        venn_widgets = function(name, stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
+        venn_widgets = function(stat_data, contrast_suffix, p_col="P.Value", q_col="adj.P.Val", 
                                 fold_col="logFC", height=1100) {
             
             dataset_names <- names(stat_data)
@@ -414,6 +461,8 @@ MyWidgets <- R6Class(
                 server = function(input, output) {
                     output$plots = renderPlot({
 
+                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
+                        
                         rdf <- data.frame(rowData(stat_data[[input$data]]))
                         out <- stv$plot_comp_venns(
                             rdf, 
@@ -430,7 +479,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        table_widget = function(name, stat_data, height=1000, default_selected=NULL, default_filter=NULL) {
+        table_widget = function(stat_data, height=1000, default_selected=NULL, default_filter=NULL) {
             
             if (is.null(default_selected)) {
                 default_selected <- colnames(rowData(stat_data[[1]]))
@@ -519,7 +568,7 @@ MyWidgets <- R6Class(
             )
             
         },
-        spotcheck_widget = function(name, stat_data, id_col, split_col, split_vals, contrast_cond,
+        spotcheck_widget = function(stat_data, id_col, split_col, split_vals, contrast_cond,
                                     height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
                                     data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL, default_label=NULL) {
             
@@ -650,13 +699,19 @@ MyWidgets <- R6Class(
                 options=list(height=height)
             )
         },
-        parse_dataset = function(dataset, outliers, target_assay=1) {
+        parse_dataset = function(dataset, outliers=NULL, target_assay=1) {
             
             if (typeof(target_assay) == "character" && !(target_assay %in% names(assays(dataset)))) {
                 stop("Unknown character target_assay: ", target_assay)
             }
             
-            non_outliers <- colnames(dataset)[!colnames(dataset) %in% outliers]
+            if (!is.null(outliers)) {
+                non_outliers <- colnames(dataset)[!colnames(dataset) %in% outliers]
+            }
+            else {
+                non_outliers <- colnames(dataset)
+            }
+            
             sdf <- assays(dataset)[[target_assay]][, non_outliers]
             ddf <- data.frame(colData(dataset)) %>% filter(sample %in% non_outliers)
             adf <- rowData(dataset) %>% data.frame()
@@ -664,7 +719,15 @@ MyWidgets <- R6Class(
         }
     ),
     private = list(
-        make_scale = 1.01
+        make_scale = 1.01,
+        get_contrasts_from_suffix = function(dataset, contrast_suffix) {
+            
+            row_data_cols <-colnames(rowData(dataset)) 
+            
+            make.names(gsub(
+                paste0(".", contrast_suffix), "", 
+                row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]))
+        }
     )
 ) 
 
