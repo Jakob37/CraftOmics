@@ -271,7 +271,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        clustering_widget = function(datasets, outlier_sets, height=1500, default_cond=NULL) {
+        clustering_widget = function(datasets, outlier_sets=NULL, height=1500, default_cond=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -295,9 +295,14 @@ MyWidgets <- R6Class(
                     output$plot = renderPlot({
                         
                         dataset <- datasets[[input$data]]
-                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
+                        if (!is.null(outlier_sets)) {
+                            outliers <- unname(unlist(outlier_sets[input$checkgroup]))
+                        }
+                        else {
+                            outliers <- NULL
+                        }
                         parsed <- self$parse_dataset(dataset, outliers)
-                        mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]]))
+                        mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]])) + ggtitle(paste0("Dataset: ", input$data))
                         
                     }, height = 1200)
                 },
@@ -358,14 +363,14 @@ MyWidgets <- R6Class(
                             })
                         }
                         
-                        grid.arrange(grobs=plts, ncol=1)
+                        grid.arrange(grobs=plts, ncol=1, top=paste0("Dataset: ", input$data))
                     }, height = 500)
                 },
                 options=list(height=height)
             )
         },
         
-        scatter_widgets = function(stat_data, contrasts, p_col="P.Value", q_col="adj.P.Val", 
+        scatter_widgets = function(stat_data, contrast_suffix, p_col="P.Value", q_col="adj.P.Val", 
                                    fold_col="logFC", expr_col="AveExpr", height=1100) {
             
             dataset_names <- names(stat_data)
@@ -386,6 +391,8 @@ MyWidgets <- R6Class(
                         
                         rdf <- data.frame(rowData(stat_data[[input$data]]))
                         plts <- list()
+                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
+                        
                         for (contrast in contrasts) {
                             
                             tbl <- data.frame(
@@ -409,13 +416,15 @@ MyWidgets <- R6Class(
                             })
                         }
                         
-                        grid.arrange(grobs=plts, ncol=3)
+                        grid.arrange(grobs=plts, ncol=3, top=paste0("Dataset: ", input$data))
                     }, height=300)
                     
                     output$mas = renderPlot({
                         
                         rdf <- data.frame(rowData(stat_data[[input$data]]))
                         plts <- list()
+                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
+                        
                         for (contrast in contrasts) {
                             
                             tbl <- data.frame(
@@ -438,7 +447,7 @@ MyWidgets <- R6Class(
                             })
                         }
                         
-                        grid.arrange(grobs=plts, ncol=3)
+                        grid.arrange(grobs=plts, ncol=3, top=paste0("Dataset: ", input$data))
                     }, height=300)
                 },
                 options=list(height=height)
@@ -472,7 +481,7 @@ MyWidgets <- R6Class(
                             sig_thres = input$thres, 
                             log2_fold_thres = input$fold
                         )
-                        grid.arrange(grobs=out, ncol=3)
+                        grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$data))
                     })
                 },
                 options=list(height=800)
@@ -550,8 +559,8 @@ MyWidgets <- R6Class(
                         thedata() %>% 
                             datatable(options=list(
                                 pageLength=10, 
-                                scrollX=TRUE, 
-                                autoWidth=TRUE,
+                                scrollX=TRUE,
+                                # autoWidth=TRUE,
                                 columnDefs=list(list(width="10px", targets="_all"))
                             )) %>%
                             DT::formatRound(columns=input$fields, digits=input$decimals)
@@ -568,9 +577,12 @@ MyWidgets <- R6Class(
             )
             
         },
-        spotcheck_widget = function(stat_data, id_col, split_col, split_vals, contrast_cond,
+        spotcheck_widget = function(stat_data, id_col, contrast_suffix, contrast_cond, split_col=NULL,
                                     height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
                                     data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL, default_label=NULL) {
+            # spotcheck_widget = function(stat_data, id_col, split_col, split_vals, contrast_cond,
+            #                         height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
+            #                         data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL, default_label=NULL) {
             
             if (is.null(default_data)) {
                 default_data <- colnames(rowData(stat_data[[1]]))
@@ -624,33 +636,23 @@ MyWidgets <- R6Class(
                         non_outliers <- colnames(target)[!colnames(target) %in% outliers]
                         target <- target[, non_outliers]
                         
-                        make_scatter <- function(row_ses, title) {
-                            
-                            fert_vals <- colData(row_ses)[[corr_col]]
-                            expr_vals <- assay(row_ses)[1, ]
-                            color <- colData(row_ses)[[input$color]]
-                            label_names <- colData(row_ses)[, input$label_type]
-                            
-                            plt <- ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color, label=label_names), 
-                                   aes(expr, fert, color=color, label=label)) + 
-                                xlab("Expression") +
-                                ylab("Fertility") +
-                                theme_classic() +
-                                ggtitle(title)
-                            
-                            if (!input$showlabels) {
-                                plt + geom_point()
-                            }
-                            else {
-                                plt + geom_text()
-                            }
+                        if (!is.null(split_col)) {
+                            split_col <- colData(target)[[split_col]]
+                            split_vals <- sort(unique(split_col))
+                            plts <- lapply(split_vals, function(split_val, data, split_col, contrast_cond, label_type, color, show_labels, color_scatter, corr_col) { 
+                                data_part <- data[, split_col == split_val] 
+                                name <- paste("Split:", split_val)
+                                plt <- private$make_scatter(data_part, name, show_labels, color, label_type, corr_col)
+                            }, 
+                            data=target, split_col=split_col, contrast_cond=contrast_cond, label_type=input$label_type, color=input$color, show_labels=input$showlabels, corr_col=corr_col)
+                        }
+                        else {
+                            plts <- list()
+                            plts[[1]] <- private$make_scatter(target, "Scatter", input$showlabels, input$color, input$label_type, corr_col)
                         }
                         
-                        b1_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[1]], data_names[1])
-                        b2_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[2]], data_names[2])
-                        b3_plt <- make_scatter(target[, colData(target)[[split_col]] == split_vals[3]], data_names[3])
-                        
-                        ggarrange(b1_plt, b2_plt, b3_plt, ncol=3, common.legend=TRUE, legend="bottom")
+                        fig <- ggpubr::ggarrange(plotlist=plts, ncol=3, common.legend=TRUE, legend="bottom")
+                        ggpubr::annotate_figure(fig, top=text_grob(paste0("Dataset: ", input$data)))
                     })
                     
                     output$contrast = renderPlot({
@@ -662,38 +664,23 @@ MyWidgets <- R6Class(
                         non_outliers <- colnames(target)[!colnames(target) %in% outliers]
                         target <- target[, non_outliers]
                         
-                        make_box <- function(row_ses, title) {
-                            expr_vals <- assay(row_ses)[1, ]
-                            high_fert <- colData(row_ses[1, ])[[contrast_cond]]
-                            label_names <- colData(row_ses)[, input$label_type]
-                            # sample_names <- rownames(colData(row_ses))
-                            
-                            stat_df <- data.frame(
-                                expr=expr_vals, 
-                                high_fert=high_fert, 
-                                color=colData(row_ses[1, ])[[input$color]],
-                                labels=label_names
-                            )
-                            
-                            plt <- ggplot(
-                                stat_df, 
-                                aes(x=high_fert, y=expr_vals, fill=high_fert, label=labels)
-                                ) + 
-                                geom_boxplot(alpha=0.5) + 
-                                theme_classic()
-                            
-                            if (input$showlabels) target_geom <- geom_text
-                            else target_geom <- geom_point
-                            
-                            if (input$colorscatter) plt + target_geom(aes(color=color))
-                            else plt + target_geom()
+                        if (!is.null(split_col)) {
+                            split_col <- colData(target)[[split_col]]
+                            split_vals <- sort(unique(split_col))
+                            plts <- lapply(split_vals, function(split_val, data, split_col, contrast_cond, label_type, color, show_labels, color_scatter) { 
+                                data_part <- data[, split_col == split_val] 
+                                name <- paste("Split:", split_val)
+                                plt <- private$make_box(data_part, name, contrast_cond, label_type, color, show_labels, color_scatter)
+                            }, 
+                            data=target, split_col=split_col, contrast_cond=contrast_cond, label_type=input$label_type, color=input$color, show_labels=input$showlabels, color_scatter=input$colorscatter)
+                        }
+                        else {
+                            plts <- list()
+                            plts[[1]] <- private$make_box(target, "Contrast", contrast_cond, input$label_type, input$color, input$showlabels, input$colorscatter)
                         }
                         
-                        b1_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[1]], split_vals[1])
-                        b2_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[2]], split_vals[2])
-                        b3_plt <- make_box(target[, colData(target)[[split_col]] == split_vals[3]], split_vals[3])
-                        
-                        ggarrange(b1_plt, b2_plt, b3_plt, ncol=3, common.legend=TRUE, legend="bottom")
+                        fig <- ggpubr::ggarrange(plotlist=plts, ncol=3, common.legend=TRUE, legend="bottom")
+                        ggpubr::annotate_figure(fig, top=text_grob(paste0("Dataset: ", input$data)))
                     })
                 },
                 options=list(height=height)
@@ -727,6 +714,49 @@ MyWidgets <- R6Class(
             make.names(gsub(
                 paste0(".", contrast_suffix), "", 
                 row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]))
+        },
+        make_scatter = function(row_ses, title, show_labels, color, label_type, corr_col) {
+            
+            fert_vals <- colData(row_ses)[[corr_col]]
+            color <- colData(row_ses)[[color]]
+            label_names <- colData(row_ses)[, label_type]
+            
+            plt <- ggplot(data.frame(expr=assay(row_ses)[1,], fert=fert_vals, color=color, label=label_names), 
+                          aes(expr, fert, color=color, label=label)) + 
+                xlab("Expression") +
+                ylab("Fertility") +
+                theme_classic() +
+                ggtitle(title)
+            
+            if (show_labels) target_geom <- geom_text
+            else target_geom <- geom_point
+            
+            plt + target_geom(na.rm=TRUE)
+        },
+        make_box = function(row_ses, title, contrast_cond, label_type, color, showlabels, colorscatter) {
+            expr_vals <- assay(row_ses)[1, ]
+            high_fert <- colData(row_ses[1, ])[[contrast_cond]]
+            label_names <- colData(row_ses)[, label_type]
+
+            stat_df <- data.frame(
+                expr=expr_vals, 
+                high_fert=high_fert, 
+                color=colData(row_ses[1, ])[[color]],
+                labels=label_names
+            )
+            
+            plt <- ggplot(
+                stat_df, 
+                aes(x=high_fert, y=expr_vals, fill=high_fert, label=labels)
+            ) + 
+                geom_boxplot(alpha=0.5, na.rm=TRUE) + 
+                theme_classic()
+            
+            if (showlabels) target_geom <- geom_text
+            else target_geom <- geom_point
+            
+            if (colorscatter) plt + target_geom(aes(color=color))
+            else plt + target_geom(na.rm=TRUE)
         }
     )
 ) 
