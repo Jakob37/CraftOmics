@@ -1,6 +1,9 @@
-
+library(R6)
 library(shiny)
+library(tidyverse)
 library(gridExtra)
+library(DT)
+library(ggpubr)
 
 # Datasets expected format: Named list linked to SummarizedExperiment instances
 
@@ -488,7 +491,7 @@ MyWidgets <- R6Class(
             )
         },
         
-        table_widget = function(stat_data, height=1000, default_selected=NULL, default_filter=NULL) {
+        table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
             
             if (is.null(default_selected)) {
                 default_selected <- colnames(rowData(stat_data[[1]]))
@@ -578,12 +581,9 @@ MyWidgets <- R6Class(
             
         },
         spotcheck_widget = function(stat_data, id_col, contrast_suffix, contrast_cond, split_col=NULL,
-                                    height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
-                                    data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL, default_label=NULL) {
-            # spotcheck_widget = function(stat_data, id_col, split_col, split_vals, contrast_cond,
-            #                         height=1100, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
-            #                         data_names=c("Group 1", "Group 2", "Group 3"), outlier_sets=NULL, default_label=NULL) {
-            
+                                    base_height=600, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
+                                    outlier_sets=NULL, default_label=NULL) {
+
             if (is.null(default_data)) {
                 default_data <- colnames(rowData(stat_data[[1]]))
             }
@@ -597,9 +597,15 @@ MyWidgets <- R6Class(
             }
             
             dataset_names <- names(stat_data)
-            # default_name <- dataset_names[1]
             dataset <- stat_data[[1]]
             row_ids <- rowData(dataset)[[id_col]]
+
+            if (!is.null(corr_col)) {
+                height <- base_height + 500
+            }
+            else {
+                height <- base_height + 500
+            }
             
             shinyApp(
                 ui = fluidPage(
@@ -619,43 +625,15 @@ MyWidgets <- R6Class(
                         ),
                         checkboxGroupInput("outliers", "Remove group", choices=names(outlier_sets), selected=NULL)
                     ),
-                    plotOutput("scatters"),
-                    plotOutput("contrast")
+                    selectInput("contrast", "Contrast column:", selected=contrast_cond, choices=colnames(colData(dataset))),
+                    plotOutput("contrast"),
+                    plotOutput("scatters")
                 ),
                 server = function(input, output) {
-                    output$scatters = renderPlot({
-                        
-                        if (is.null(corr_col)) {
-                            return()
-                        }
-                        
-                        se <- stat_data[[input$data]]
-                        target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
-                        
-                        outliers <- unname(unlist(outlier_sets[input$outliers]))
-                        non_outliers <- colnames(target)[!colnames(target) %in% outliers]
-                        target <- target[, non_outliers]
-                        
-                        if (!is.null(split_col)) {
-                            split_col <- colData(target)[[split_col]]
-                            split_vals <- sort(unique(split_col))
-                            plts <- lapply(split_vals, function(split_val, data, split_col, contrast_cond, label_type, color, show_labels, color_scatter, corr_col) { 
-                                data_part <- data[, split_col == split_val] 
-                                name <- paste("Split:", split_val)
-                                plt <- private$make_scatter(data_part, name, show_labels, color, label_type, corr_col)
-                            }, 
-                            data=target, split_col=split_col, contrast_cond=contrast_cond, label_type=input$label_type, color=input$color, show_labels=input$showlabels, corr_col=corr_col)
-                        }
-                        else {
-                            plts <- list()
-                            plts[[1]] <- private$make_scatter(target, "Scatter", input$showlabels, input$color, input$label_type, corr_col)
-                        }
-                        
-                        fig <- ggpubr::ggarrange(plotlist=plts, ncol=3, common.legend=TRUE, legend="bottom")
-                        ggpubr::annotate_figure(fig, top=text_grob(paste0("Dataset: ", input$data)))
-                    })
                     
                     output$contrast = renderPlot({
+                        
+                        contrast_cond <- input$contrast
                         
                         se <- stat_data[[input$data]]
                         target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
@@ -677,6 +655,40 @@ MyWidgets <- R6Class(
                         else {
                             plts <- list()
                             plts[[1]] <- private$make_box(target, "Contrast", contrast_cond, input$label_type, input$color, input$showlabels, input$colorscatter)
+                        }
+                        
+                        fig <- ggpubr::ggarrange(plotlist=plts, ncol=3, common.legend=TRUE, legend="bottom")
+                        ggpubr::annotate_figure(fig, top=text_grob(paste0("Dataset: ", input$data)))
+                    })
+                    
+                    output$scatters = renderPlot({
+                        
+                        if (is.null(corr_col)) {
+                            return()
+                        }
+                        
+                        contrast_cond <- input$contrast
+                        
+                        se <- stat_data[[input$data]]
+                        target <- se[rowData(stat_data[[input$data]])[[id_col]] == input$rowid, ]
+                        
+                        outliers <- unname(unlist(outlier_sets[input$outliers]))
+                        non_outliers <- colnames(target)[!colnames(target) %in% outliers]
+                        target <- target[, non_outliers]
+                        
+                        if (!is.null(split_col)) {
+                            split_col <- colData(target)[[split_col]]
+                            split_vals <- sort(unique(split_col))
+                            plts <- lapply(split_vals, function(split_val, data, split_col, contrast_cond, label_type, color, show_labels, color_scatter, corr_col) { 
+                                data_part <- data[, split_col == split_val] 
+                                name <- paste("Split:", split_val)
+                                plt <- private$make_scatter(data_part, name, show_labels, color, label_type, corr_col)
+                            }, 
+                            data=target, split_col=split_col, contrast_cond=contrast_cond, label_type=input$label_type, color=input$color, show_labels=input$showlabels, corr_col=corr_col)
+                        }
+                        else {
+                            plts <- list()
+                            plts[[1]] <- private$make_scatter(target, "Scatter", input$showlabels, input$color, input$label_type, corr_col)
                         }
                         
                         fig <- ggpubr::ggarrange(plotlist=plts, ncol=3, common.legend=TRUE, legend="bottom")
