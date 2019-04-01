@@ -25,6 +25,7 @@ MasterWidget <- R6Class(
             }
             
             all_settings <- c(
+                "tabs",
                 "data1", "data2", "checkgroup",
                 "cond1", "cond2",
                 "show_na", "show_mean",
@@ -36,6 +37,8 @@ MasterWidget <- R6Class(
                 ui = fluidPage(
                     
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
+                    
+                    # General
                     splitLayout(
                         selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names),
                         selectInput("data2", "Dataset 2:", selected=default_name, choices=dataset_names),
@@ -45,17 +48,49 @@ MasterWidget <- R6Class(
                         selectInput("cond1", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
                         selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
                     ),
-                    splitLayout(
-                        checkboxInput("show_na", "Show NA counts", value=FALSE),
-                        checkboxInput("show_mean", "Show mean", value=FALSE)
+                    
+                    conditionalPanel(
+                        condition = "input.tabs == 'Barplot'",
+                        splitLayout(
+                            checkboxInput("show_na", "Show NA counts", value=FALSE),
+                            checkboxInput("show_mean", "Show mean", value=FALSE)
+                        )
                     ),
-                    numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
-                    checkboxInput("fulldata", "Use full data", value = FALSE),
+                    
+                    conditionalPanel(
+                        condition = "input.tabs == 'QQ' || input.tabs == 'Density'",
+                        splitLayout(
+                            numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
+                            checkboxInput("fulldata", "Use full data", value = FALSE)
+                        )
+                    ),
+                    
+                    # Principal component
+                    conditionalPanel(
+                        condition = "input.tabs == 'PCA'",
+                        splitLayout(
+                            checkboxInput("as_label", "Show as text"),
+                            selectInput("text_labels", "Text labels:", selected=default_cond, choices=colnames(colData(dataset)))
+                        ),
+                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1),
+                        splitLayout(
+                            selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
+                            selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1)
+                        ),
+                        splitLayout(
+                            selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
+                            selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
+                        )
+                    ),
+                    
+                    # Technical
                     tabsetPanel(
+                        id = "tabs",
                         type = "tabs",
                         tabPanel("Barplot", plotOutput("bar")),
                         tabPanel("QQ", plotOutput("qq")),
-                        tabPanel("Density", plotOutput("density"))
+                        tabPanel("Density", plotOutput("density")),
+                        tabPanel("PCA", plotOutput("pca"))
                     ),
                     splitLayout(
                         downloadButton(outputId="download", label="Download plot"),
@@ -85,12 +120,33 @@ MasterWidget <- R6Class(
                         curr_plot(datasets, input)
                     })
                     
+                    output$pca = renderPlot({
+                        curr_plot <<- self$do_pca
+                        curr_plot(datasets, input)
+                    })
+                    
                     output$download <- downloadHandler(
                         
                         filename = function() {
                             input$output_path
                         },
                         content = function(file) {
+                            
+                            if (input$tabs == "Barplot") {
+                                curr_plot <- self$do_bar
+                            }
+                            else if (input$tabs == "QQ") {
+                                curr_plot <- self$do_qq
+                            }
+                            else if (input$tabs == "Density") {
+                                curr_plot <- self$do_density
+                            }
+                            else if (input$tabs == "PCA") {
+                                curr_plot <- self$do_pca
+                            }
+                            else {
+                                stop("Unknown option: ", input$tabs)
+                            }
                             
                             plt <- curr_plot(datasets, input)
                             
@@ -121,6 +177,7 @@ MasterWidget <- R6Class(
                     observe({
                         self$update_input_choices(session, datasets, "cond1", input$data1, input$cond1)
                         self$update_input_choices(session, datasets, "cond2", input$data2, input$cond2)
+                        self$update_input_choices(session, datasets, "text_labels", input$data1, input$text_labels)
                     })
                 },
                 options=list(height=height)
@@ -177,6 +234,27 @@ MasterWidget <- R6Class(
             }
             
             grid.arrange(plts[[1]], plts[[2]])
+        },
+        
+        do_pca = function(datasets, input) {
+            
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            if (!input$as_label) label <- NULL
+            else label <- dobs[[1]]$ddf[, input$text_labels]
+            
+            plts <- list()
+            for (i in seq_len(2)) {
+                plts[[i]] <- mv$pca(
+                    dobs[[i]]$sdf,
+                    as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]),
+                    pcs=c(as.numeric(input[[paste0("pc1_plt", i)]]), as.numeric(input[[paste0("pc2_plt", i)]])),
+                    label=label
+                ) + ggtitle(dobs[[i]]$title)
+            }
+            scree <- mv$plot_component_fraction(dobs[[1]]$sdf, max_comps=input$pc_comps)
+            
+            grid.arrange(plts[[1]], plts[[2]], scree, ncol=2)
+            
         },
         
         get_preproc_list = function(datasets, dataset_names, checkgroup) {
