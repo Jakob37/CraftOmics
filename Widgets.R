@@ -9,7 +9,7 @@ library(ggpubr)
 
 MyWidgets <- R6Class(
     public = list(
-        density_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL) {
+        density_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL, interactive=TRUE) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -19,16 +19,32 @@ MyWidgets <- R6Class(
                 default_cond <- colnames(colData(dataset))[1]
             }
             
+            make_sample_dist <- function(dataset_name, cond, outliers, usecount) {
+                dataset <- datasets[[dataset_name]]
+                parsed <- self$parse_dataset(dataset, outliers)
+                plt <- ev$sample_dist(
+                    parsed$sdf, 
+                    color_col=as.factor(parsed$ddf[[cond]]), 
+                    title=paste("Dataset:", dataset_name), 
+                    max_count=usecount)
+                plt
+            }
+            
+            if (!interactive) {
+                plt <- make_sample_dist(default_name, default_cond, outliers=outlier_sets, usecount=NULL)
+                return(plt)
+            }
+            
             shinyApp(
                 ui = fluidPage(
                     
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     splitLayout(
-                        selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                        selectInput("data1", "Dataset:", selected=default_name, choices=dataset_names),
                         selectInput("data2", "Dataset:", selected=default_name, choices=dataset_names)
                     ),
                     splitLayout(
-                        selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
+                        selectInput("cond1", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
                         selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
                     ),
                     numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
@@ -43,50 +59,35 @@ MyWidgets <- R6Class(
                         if (input$fulldata) usecount <- NULL
                         else usecount <- input$subset
                         
-                        dataset <- datasets[[input$data]]
-                        parsed <- self$parse_dataset(dataset, outliers)
-                        plt1 <- ev$sample_dist(
-                            parsed$sdf, 
-                            color_col=as.factor(parsed$ddf[[input$cond]]), 
-                            title=paste("Dataset:", input$data), 
-                            max_count=usecount)
-                        
-                        dataset2 <- datasets[[input$data2]]
-                        parsed2 <- self$parse_dataset(dataset2, outliers)
-                        plt2 <- ev$sample_dist(
-                            parsed2$sdf, 
-                            color_col=as.factor(parsed2$ddf[[input$cond2]]), 
-                            title=paste("Dataset:", input$data2), 
-                            max_count=usecount)
+                        plt1 <- make_sample_dist(input$data1, input$cond1, outliers, usecount)
+                        plt2 <- make_sample_dist(input$data2, input$cond2, outliers, usecount)
                         
                         grid.arrange(plt1, plt2)
                     })
                     
-                    observe({
-                        d1_choices <- colnames(colData(datasets[[input$data]]))
+                    update_input_choices <- function(session, target, data_name, cond_name) {
+                        choices <- colnames(colData(datasets[[data_name]]))
+                        if (cond_name %in% choices) selected <- cond_name
+                        else selected <- default_cond
+                        
                         updateSelectInput(
                             session,
-                            "cond",
-                            choices=d1_choices,
-                            selected=colnames(colData(datasets[[input$data]]))[1]
+                            target,
+                            choices=choices,
+                            selected=selected
                         )
-                    })
+                    }
                     
                     observe({
-                        d2_choices <- colnames(colData(datasets[[input$data2]]))
-                        updateSelectInput(
-                            session,
-                            "cond2",
-                            choices=d2_choices,
-                            selected=colnames(colData(datasets[[input$data2]]))[1]
-                        )
+                        update_input_choices(session, "cond1", input$data1, input$cond1)
+                        update_input_choices(session, "cond2", input$data2, input$cond2)
                     })
                 },
                 options=list(height=height)
             )
         },
         
-        total_intensity_widget = function(datasets, outlier_sets, height=800, default_cond=NULL) {
+        total_intensity_widget = function(datasets, outlier_sets, height=800, default_cond=NULL, show_plt=FALSE) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -94,6 +95,24 @@ MyWidgets <- R6Class(
             
             if (is.null(default_cond)) {
                 default_cond <- colnames(colData(dataset))[1]
+            }
+            
+            make_plot <- function(data, checkgroup=NULL, cond=NULL, show_na=FALSE, show_mean=FALSE) {
+                dataset <- datasets[[data]]
+                outliers <- unname(unlist(outlier_sets[checkgroup]))
+                parsed <- self$parse_dataset(dataset, outliers)
+                
+                plt <- ev$abundance_bars(
+                    parsed$sdf, 
+                    color_col=as.factor(parsed$ddf[[cond]]), 
+                    title="Bars", 
+                    show_missing=show_na, 
+                    show_average=show_mean)
+                return(plt)
+            }
+
+            if (show_plt) {
+                return(make_plot(default_name, cond=default_cond))
             }
             
             shinyApp(
@@ -114,18 +133,7 @@ MyWidgets <- R6Class(
                 ),
                 server = function(input, output) {
                     output$plot = renderPlot({
-                        
-                        dataset <- datasets[[input$data]]
-                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- self$parse_dataset(dataset, outliers)
-
-                        plt <- ev$abundance_bars(
-                            parsed$sdf, 
-                            color_col=as.factor(parsed$ddf[[input$cond]]), 
-                            title="Bars", 
-                            show_missing=input$show_na, 
-                            show_average=input$show_mean)
-                        plt
+                        make_plot(input$data, input$checkgroup, input$cond, input$show_na, input$show_mean)
                     })
                 },
                 options=list(height=height)
@@ -255,8 +263,13 @@ MyWidgets <- R6Class(
                     observe({
                         cond_choices <- colnames(colData(datasets[[input$data]]))
                         
+                        print(cond_choices)
+                        
                         selected_1 <- input$cond_plt1
                         selected_2 <- input$cond_plt2
+                        
+                        print(selected_1)
+                        print(selected_2)
                         
                         if (!selected_1 %in% cond_choices) {
                             selected_1 <- cond_choices[1]
@@ -268,6 +281,7 @@ MyWidgets <- R6Class(
                         
                         updateSelectInput(session, "cond_plt1", choices=cond_choices, selected=selected_1)
                         updateSelectInput(session, "cond_plt2", choices=cond_choices, selected=selected_2)
+                        updateSelectInput(session, "text_labels", choices=cond_choices, selected=selected_1)
                     })
                 },
                 options = list(height=height)
@@ -541,7 +555,7 @@ MyWidgets <- R6Class(
                         }
                         
                         filtered_selected <- retained %>% 
-                            select(input$fields) %>%
+                            dplyr::select(input$fields) %>%
                             data.frame()
 
                         filtered_selected
@@ -700,6 +714,8 @@ MyWidgets <- R6Class(
         },
         parse_dataset = function(dataset, outliers=NULL, target_assay=1) {
             
+            # browser()
+            
             if (typeof(target_assay) == "character" && !(target_assay %in% names(assays(dataset)))) {
                 stop("Unknown character target_assay: ", target_assay)
             }
@@ -721,7 +737,7 @@ MyWidgets <- R6Class(
         make_scale = 1.01,
         get_contrasts_from_suffix = function(dataset, contrast_suffix) {
             
-            row_data_cols <-colnames(rowData(dataset)) 
+            row_data_cols <- colnames(rowData(dataset)) 
             
             make.names(gsub(
                 paste0(".", contrast_suffix), "", 

@@ -30,13 +30,11 @@ ROCVisuals <- R6Class(
             }
             
             raw_df <- cbind(truth=truth_vector, as.data.frame(pvals_list))
-            
             if (!is.null(annot)) {
                 raw_df <- cbind(raw_df, annot=annot)
             }
             
             shaped_df <- raw_df %>% gather(stat_type, val, names(pvals_list))
-            
             if (reversed_size_importance) {
                 shaped_df$val_importance <- 1 - shaped_df$val
             }
@@ -73,7 +71,7 @@ ROCVisuals <- R6Class(
         },
         
         perf_measures = function(confusion_matrix, true_pattern, false_pattern) {
-            
+            warning("DEPRECATED use the one in the MachineLearningTools module instead")
             
             tn <- confusion_matrix$table[false_pattern, false_pattern]
             tp <- confusion_matrix$table[true_pattern, true_pattern]
@@ -103,6 +101,8 @@ ROCVisuals <- R6Class(
         },
         
         show_measures = function(measure_df, ignores=NULL) {
+            
+            warning("DEPRECATED use the one in MachineLearningTools module instead")
             
             measure_df$analysis <- rownames(measure_df)
             long_df <- tidyr::gather(measure_df, "measure", "value", -analysis, -one_of(ignores))

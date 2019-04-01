@@ -3,6 +3,7 @@ library(ggdendro)
 library(ggfortify)
 library(RColorBrewer)
 library(R6)
+library(MASS)
 
 MultivarVis <- R6Class(
     public = list(
@@ -45,6 +46,16 @@ MultivarVis <- R6Class(
             
             plt <- self$style_plt(plt)
             return(plt)
+        },
+        
+        lda = function(data, color_factor, title="LDA", lds=c(1,2), label=NULL) {
+            
+            
+            
+            lda_obj <- MASS::lda(
+                
+            )
+            
         },
 
         plotMDS = function(expr_m, levels, comp1=1, comp2=2, title="no title") {

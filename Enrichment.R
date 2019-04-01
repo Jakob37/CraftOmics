@@ -1,5 +1,4 @@
 library(R6)
-library(gage)
 library(tidyverse)
 
 # Extra information:
@@ -11,6 +10,8 @@ Enrichment <- R6Class(
     public = list(
         perform_gse = function(mat, annot_rows, cond_cols, levels, annot_sets, quiet=FALSE, same_dir=TRUE) {
         
+            library(gage)
+            
             if (!is.matrix(mat)) {
                 stop("Input data must be a matrix, found: ", typeof(mat))
             }

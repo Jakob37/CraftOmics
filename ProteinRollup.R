@@ -60,7 +60,7 @@ ProteinRollup <- R6Class(
             df
         },
         
-        protein_rollup_on_matrix = function(design_fp, data_fp, protein_col, peptide_col, sample_col, out_fp, rollup_func=self$rrollup) {
+        protein_rollup_on_matrix = function(design_fp, data_fp, protein_col, peptide_col, sample_col, out_fp, rollup_func="rrollup") {
             
             ddf <- read_tsv(design_fp)
             raw_rdf <- read_tsv(data_fp)
@@ -69,26 +69,35 @@ ProteinRollup <- R6Class(
             
             trimmed_count <- nrow(raw_rdf) - nrow(rdf)
             if (trimmed_count != 0) {
-                message("Trimmed ", , " proteins with missing IDs")
+                message("Trimmed ", trimmed_count, " proteins with missing IDs")
             }
             
-            sdf <- rdf %>% select(one_of(ddf[[sample_col]]))
+            sdf <- rdf %>% dplyr::select(one_of(ddf[[sample_col]]))
             
-            protein_data <- rdf %>% select(protein_col) %>% unlist()
-            peptide_data <- rdf %>% select(peptide_col) %>% unlist()
+            protein_data <- rdf %>% dplyr::select(protein_col) %>% unlist()
+            peptide_data <- rdf %>% dplyr::select(peptide_col) %>% unlist()
 
             message("Performing rollup for ", length(peptide_data), " peptides to ", length(unique(protein_data)), " proteins")
             
-            prot_sdf <- self$protein_rollup(peptide_data, protein_data, as.matrix(sdf), rollup_func=rollup_func)
+            if (rollup_func == "rrollup") {
+                rollup <- self$rrollup
+            }
+            else {
+                stop("Unknown rollup func: ", rollup_func)
+            }
+            
+            prot_sdf <- self$protein_rollup(peptide_data, protein_data, as.matrix(sdf), rollup_func=rollup)
             write_tsv(prot_sdf, path=out_fp)
         },
         
         # Inspired by DANTE and pmartR
         protein_rollup = function(pep_ids, protein_ids, pep_mat, rollup_func=self$rrollup) {
             
+            warning("protein_rollup: Use on your own risk, mostly untested")
+            
             # pep_expression <- cbind(pep_ids, pep_mat)
             # prot_expression <- cbind(protein_ids, pep_mat)
-            protein_map <- cbind(protein_ids, pep_ids)
+            # protein_map <- cbind(protein_ids, pep_ids)
             
             unique_proteins <- unique(protein_ids)
             pep_counts <- list()
@@ -103,13 +112,15 @@ ProteinRollup <- R6Class(
                 pep_results[[protein]] <- scaled_peps
                 pep_counts[[protein]] <- nrow(current_peps_only)
             }
-            # browser()
+
             cbind(Protein=unique_proteins, Peptides=unlist(pep_counts), data.frame(do.call("rbind", pep_results)))
         },
         
         # Based on InfernoRDN
         # https://github.com/PNNL-Comp-Mass-Spec/InfernoRDN/blob/master/Rscripts/Rollup/RRollup.R
         remove_outliers = function(pep_mat, minPs=5, pvalue_thres=0.05) {
+            
+            warning("Completely untested")
             
             xPeptideCount <- colSums(!is.na(pep_mat))
             
@@ -153,9 +164,7 @@ ProteinRollup <- R6Class(
             # warning("Relatively untested, and no Grubbs outlier test performed")
             
             num_peps <- nrow(peptides)
-            # message(num_peps)
-            #res <- matrix(NA, nrow=1, ncol=ncol(peptides))
-            
+
             if (num_peps == 1) {
                 protein_val <- unlist(peptides)
             }
@@ -174,15 +183,11 @@ ProteinRollup <- R6Class(
                 # 2. Ratio all peptides to the reference
                 # Since data is on log scale this is the difference (?)
                 ref_ratios <- matrix(prot_val, nrow=num_peps, ncol=ncol(peptides), byrow=TRUE) - peptides
-                
-                # browser()
                 scaling_factor <- matrixStats::rowMedians(ref_ratios, na.rm=TRUE)
                 
                 # 3. Use median of ratio as scaling factor for each peptide
                 x_scaled <- peptides + matrix(scaling_factor, nrow=num_peps, ncol=ncol(peptides))
 
-                
-                                
                 # 4. Set abundance as median peptide abundance
                 protein_val <- apply(x_scaled, 2, combine_func, na.rm=TRUE)
             }
