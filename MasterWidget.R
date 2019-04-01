@@ -7,7 +7,7 @@ library(ggpubr)
 
 # Datasets expected format: Named list linked to SummarizedExperiment instances
 
-MyWidgets <- R6Class(
+MasterWidget <- R6Class(
     public = list(
         general_qual_widget = function(datasets, outlier_sets=NULL, height=800, default_plot="bar", default_cond=NULL, interactive=TRUE) {
             
@@ -24,13 +24,22 @@ MyWidgets <- R6Class(
                 return(plt)
             }
             
+            all_settings <- c(
+                "data1", "data2", "checkgroup",
+                "cond1", "cond2",
+                "show_na", "show_mean",
+                "subset", "fulldata",
+                "output_path", "output_width", "output_height", "output_dpi"
+            )
+            
             shinyApp(
                 ui = fluidPage(
                     
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     splitLayout(
-                        selectInput("data1", "Dataset:", selected=default_name, choices=dataset_names),
-                        selectInput("data2", "Dataset:", selected=default_name, choices=dataset_names)
+                        selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names),
+                        selectInput("data2", "Dataset 2:", selected=default_name, choices=dataset_names),
+                        checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL)
                     ),
                     splitLayout(
                         selectInput("cond1", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
@@ -42,50 +51,73 @@ MyWidgets <- R6Class(
                     ),
                     numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
                     checkboxInput("fulldata", "Use full data", value = FALSE),
-                    # plotOutput("main"),
                     tabsetPanel(
                         type = "tabs",
-                        tabPanel("Main", plotOutput("main")),
                         tabPanel("Barplot", plotOutput("bar")),
                         tabPanel("QQ", plotOutput("qq")),
                         tabPanel("Density", plotOutput("density"))
+                    ),
+                    splitLayout(
+                        downloadButton(outputId="download", label="Download plot"),
+                        downloadButton(outputId="download_params", label="Download parameters")
+                    ),
+                    splitLayout(
+                        textInput(inputId="output_path", label="Path"),
+                        numericInput(inputId="output_width", label="Width", value=2000),
+                        numericInput(inputId="output_height", label="Height", value=1000),
+                        numericInput(inputId="output_dpi", label="DPI", value=150)
                     )
                 ),
                 server = function(session, input, output) {
                     
                     output$bar = renderPlot({
-                        selected_names <- c(input$data1, input$data2)
-                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        dobs <- self$get_preproc_list(datasets, selected_names, outliers)
-                        if (input$fulldata) usecount <- NULL
-                        else usecount <- input$subset
-                        plt1 <- self$make_total_intensity(dobs[[1]]$sdf, dobs[[1]]$ddf, dobs[[1]]$title, input$cond1, input$show_na, input$show_mean)
-                        plt2 <- self$make_total_intensity(dobs[[2]]$sdf, dobs[[2]]$ddf, dobs[[2]]$title, input$cond2, input$show_na, input$show_mean)
-                        grid.arrange(plt1, plt2)
+                        curr_plot <<- self$do_bar
+                        curr_plot(datasets, input)
                     })
                     
                     output$qq = renderPlot({
-                        selected_names <- c(input$data1, input$data2)
-                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        dobs <- self$get_preproc_list(datasets, selected_names, outliers)
-                        if (input$fulldata) usecount <- NULL
-                        else usecount <- input$subset
-                        plt1 <- self$make_qq_plot(dobs[[1]]$sdf, dobs[[1]]$ddf, dobs[[1]]$title, input$cond1, usecount)
-                        plt2 <- self$make_qq_plot(dobs[[2]]$sdf, dobs[[2]]$ddf, dobs[[2]]$title, input$cond2, usecount)
-                        grid.arrange(plt1, plt2)
+                        curr_plot <<- self$do_qq
+                        curr_plot(datasets, input)
                     })
                     
                     output$density = renderPlot({
-                        selected_names <- c(input$data1, input$data2)
-                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        dobs <- self$get_preproc_list(datasets, selected_names, outliers)
-                        if (input$fulldata) usecount <- NULL
-                        else usecount <- input$subset
-                        plt1 <- self$make_sample_dist(dobs[[1]]$sdf, dobs[[1]]$ddf, dobs[[1]]$title, input$cond1, usecount)
-                        plt2 <- self$make_sample_dist(dobs[[2]]$sdf, dobs[[2]]$ddf, dobs[[2]]$title, input$cond2, usecount)
-                        grid.arrange(plt1, plt2)
+                        curr_plot <<- self$do_density
+                        curr_plot(datasets, input)
                     })
                     
+                    output$download <- downloadHandler(
+                        
+                        filename = function() {
+                            input$output_path
+                        },
+                        content = function(file) {
+                            
+                            plt <- curr_plot(datasets, input)
+                            
+                            inch_width <- input$output_width / input$output_dpi
+                            inch_height <- input$output_height / input$output_dpi
+                            ggsave(file, plot=plt, device="png", width=inch_width, height=inch_height, units="in", dpi=input$output_dpi)
+                        }
+                    )
+                    
+                    output$download_params <- downloadHandler(
+
+                        filename = function() {
+                            paste(input$output_path, "params", sep=".")
+                        },
+                        content = function(file) {
+                            
+                            settings <- list()
+                            for (setting in all_settings) {
+                                settings[[setting]] <- c(setting, input[[setting]])
+                            }
+                            
+                            setting_table <- data.frame(do.call("rbind", settings))
+                            colnames(setting_table) <- c("setting", "value")
+                            write_tsv(setting_table, path=file)
+                        }
+                    )
+
                     observe({
                         self$update_input_choices(session, datasets, "cond1", input$data1, input$cond1)
                         self$update_input_choices(session, datasets, "cond2", input$data2, input$cond2)
@@ -95,8 +127,62 @@ MyWidgets <- R6Class(
             )
         },
         
-        get_preproc_list = function(datasets, dataset_names, outliers) {
+        do_bar = function(datasets, input) {
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            plts <- list()
+            for (i in seq_len(2)) {
+                plts[[i]] <- ev$abundance_bars(
+                    dobs[[i]]$sdf, 
+                    color_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
+                    title=dobs[[i]]$title, 
+                    show_missing=input$show_na, 
+                    show_average=input$show_mean
+                )
+            }
             
+            grid.arrange(plts[[1]], plts[[2]])
+        },
+        
+        do_density = function(datasets, input) {
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            if (input$fulldata) usecount <- NULL
+            else usecount <- input$subset
+            
+            plts <- list()
+            for (i in seq_len(2)) {
+                plts[[i]] <- ev$sample_dist(
+                    dobs[[i]]$sdf, 
+                    color_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
+                    title=dobs[[1]]$title, 
+                    max_count=usecount
+                )
+            }
+            
+            grid.arrange(plts[[1]], plts[[2]])
+        },
+        
+        do_qq = function(datasets, input) {
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            if (input$fulldata) usecount <- NULL
+            else usecount <- input$subset
+            
+            plts <- list()
+            for (i in seq_len(2)) {
+                plts[[i]] <- ev$qq(
+                    dobs[[i]]$sdf, 
+                    title=dobs[[i]]$title, 
+                    cond_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
+                    max_count=usecount
+                )
+            }
+            
+            grid.arrange(plts[[1]], plts[[2]])
+        },
+        
+        get_preproc_list = function(datasets, dataset_names, checkgroup) {
+
+            outliers <- unname(unlist(outlier_sets[checkgroup]))
+                        
             dataset_objs <- list()
             for (i in seq_len(length(dataset_names))) {
                 
@@ -107,41 +193,11 @@ MyWidgets <- R6Class(
                 dataset_obj$sdf <- parsed$sdf
                 dataset_obj$ddf <- parsed$ddf
                 dataset_obj$title <- paste("Dataset:", dataset_name)
+                dataset_obj$outliers <- outliers
                 dataset_objs[[i]] <- dataset_obj
             }
             
             dataset_objs
-        },
-        
-        make_sample_dist = function(sdf, ddf, title, cond, usecount=NULL) {
-            
-            plt <- ev$sample_dist(
-                sdf, 
-                color_col=as.factor(ddf[[cond]]), 
-                title=title, 
-                max_count=usecount)
-            plt
-        },
-        
-        make_total_intensity = function(sdf, ddf, title, cond, show_na=FALSE, show_mean=FALSE) {
-            
-            plt <- ev$abundance_bars(
-                sdf, 
-                color_col=as.factor(ddf[[cond]]), 
-                title=title, 
-                show_missing=show_na, 
-                show_average=show_mean)
-            return(plt)
-        },
-        
-        make_qq_plot = function(sdf, ddf, title, cond, usecount=NULL) {
-            
-            ev$qq(
-                sdf, 
-                title=title, 
-                max_count=usecount,
-                cond_col=ddf[[cond]]
-            )
         },
         
         update_input_choices = function(session, datasets, target, data_name, cond_name) {
@@ -155,60 +211,6 @@ MyWidgets <- R6Class(
                 target,
                 choices=choices,
                 selected=selected
-            )
-        },
-        
-        qq_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL, interactive=TRUE) {
-            
-            dataset_names <- names(datasets)
-            default_name <- dataset_names[1]
-            dataset <- datasets[[1]]
-            
-            if (is.null(default_cond)) {
-                default_cond <- colnames(colData(dataset))[1]
-            }
-            
-            make_qq_plot <- function(data_name, cond, checkgroup=NULL, subset=1000) {
-                
-                dataset <- datasets[[data_name]]
-                parsed <- self$parse_dataset(dataset, outliers)
-                outliers <- unname(unlist(outlier_sets[checkgroup]))
-                
-                ev$qq(
-                    parsed$sdf, 
-                    title=paste0("QQ (dataset: ", data_name, ")"), 
-                    max_count=subset, 
-                    cond_col=parsed$ddf[[cond]]
-                )
-            }
-            
-            if (!interactive) {
-                plt <- make_qq_plot(default_name, default_cond)
-                return(plt)
-            }
-            
-            shinyApp(
-                ui = fluidPage(
-                    tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
-                    splitLayout(
-                        selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                        selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
-                    ),
-                    splitLayout(
-                        checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
-                        checkboxInput("show_na", "Show NA counts:", value=FALSE)
-                    ),
-                    numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
-                    plotOutput("plot")
-                ),
-                server = function(input, output) {
-                    output$plot = renderPlot({
-                        
-                        plt <- make_qq_plot(input$data, input$cond, outliers, input$subset)
-                        plt
-                    })
-                },
-                options=list(height=height)
             )
         },
         
@@ -290,13 +292,8 @@ MyWidgets <- R6Class(
                     observe({
                         cond_choices <- colnames(colData(datasets[[input$data]]))
                         
-                        print(cond_choices)
-                        
                         selected_1 <- input$cond_plt1
                         selected_2 <- input$cond_plt2
-                        
-                        print(selected_1)
-                        print(selected_2)
                         
                         if (!selected_1 %in% cond_choices) {
                             selected_1 <- cond_choices[1]
@@ -816,6 +813,5 @@ MyWidgets <- R6Class(
     )
 ) 
 
-mywidgets <- MyWidgets$new()
-mw <- mywidgets
-print("Loading module to 'mywidgets' and 'mw'")
+masterwidget <- MasterWidget$new()
+print("Loading module to 'masterwidget'")
