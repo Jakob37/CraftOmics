@@ -127,8 +127,6 @@ EvalVis <- R6Class(
             
             if (!is.null(cond_col)) {
                 cond_map <- cbind(id=colnames(df), cond=cond_col) %>% data.frame()
-                print(head(df_data))
-                print(head(cond_map))
                 df_data <- df_data %>% inner_join(y=cond_map, by="id")
             }
             
@@ -139,11 +137,9 @@ EvalVis <- R6Class(
             int <- y[1L] - slope * x[1L]
 
             if (!is.null(cond_col)) {
-                print("color")
                 base_plt <- ggplot(df_data, aes(sample=expression, color=cond))
             }
             else {
-                print("non color")
                 base_plt <- ggplot(df_data, aes(sample=expression))
             }
             
