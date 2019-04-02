@@ -144,7 +144,7 @@ MasterWidget <- R6Class(
                                 tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
-                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=250, step=height_step_size)),
+                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=400, step=height_step_size)),
                                 tabPanel("MA", numericInput(inputId="MA_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Vulc", numericInput(inputId="Vulc_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Spotcheck", numericInput(inputId="Spotcheck_height", "Plot height", value=500, step=height_step_size)),

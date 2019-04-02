@@ -70,12 +70,22 @@ SignificanceTableVis <- R6Class(
                 col > 0
             })
             
-            sig_vals_list <- list()
-            fold_vals_list <- list()
+            sig_vals_indices <- list()
+            same_folds_list <- list()
             comps <- list(c(1,2), c(2,3), c(1,3), c(1,2,3))
+            
             for (comp in comps) {
-                sig_vals_list[[paste(comp, collapse="")]] <- sig_vals[complete.cases(sig_vals[, comp]), comp]
-                fold_vals_list[[paste(comp, collapse="")]] <- fold_signs[complete.cases(fold_signs[, comp]), comp]
+                belonging_row_nbrs <- which(apply(sig_vals[, comp], 1, all))
+                sig_vals_indices[[paste(comp, collapse="")]] <- belonging_row_nbrs
+                belonging_fold_signs <- fold_signs[belonging_row_nbrs, comp, drop=FALSE]
+                if (!is.null(belonging_fold_signs)) {
+                    same_folds_list[[paste(comp, collapse="")]] <- which(apply(belonging_fold_signs, 1, function(row) {
+                        length(unique(row)) == 1
+                    }))
+                }
+                else {
+                    same_folds_list[[paste(comp, collapse="")]] <- 0
+                }
             }
             
             circle_spacing <- 0.6
@@ -85,53 +95,39 @@ SignificanceTableVis <- R6Class(
                 labels = contrasts
             )
             
-            count_true_rows <- function(df) {
-                length(which(apply(df, 1, all)))
-            }
-            
-            c123 <- count_true_rows(sig_vals_list[["123"]])
-            c12 <- count_true_rows(sig_vals_list[["12"]]) - c123
-            c23 <- count_true_rows(sig_vals_list[["23"]]) - c123
-            c13 <- count_true_rows(sig_vals_list[["13"]]) - c123
-            c1 <- length(which(sig_vals[, 1])) - c12 - c13 - c123
-            c2 <- length(which(sig_vals[, 2])) - c12 - c23 - c123
-            c3 <- length(which(sig_vals[, 3])) - c13 - c23 - c123
+            c123 <- length(sig_vals_indices[["123"]])
+            c12 <- length(sig_vals_indices[["12"]]) - c123
+            c23 <- length(sig_vals_indices[["23"]]) - c123
+            c13 <- length(sig_vals_indices[["13"]]) - c123
             
             tot_counts <- c(
-                c1,
-                c2,
-                c3,
+                length(which(sig_vals[, 1])) - c12 - c13 - c123,
+                length(which(sig_vals[, 2])) - c12 - c23 - c123,
+                length(which(sig_vals[, 3])) - c13 - c23 - c123,
                 c12,
                 c23,
                 c13,
                 c123
             )
             
-            get_contra_count <- function(folds) {
-                contra_folds <- apply(folds, 1, function(row) {
-                    length(unique(row)) == 1
-                })
-                length(which(contra_folds))
-            }
+            same_counts <- c(
+                0,
+                0,
+                0,
+                length(same_folds_list[["12"]]) - length(same_folds_list[["123"]]),
+                length(same_folds_list[["23"]]) - length(same_folds_list[["123"]]),
+                length(same_folds_list[["13"]]) - length(same_folds_list[["123"]]),
+                length(same_folds_list[["123"]])
+            )
             
-            # contra_counts <- c(
-            #     0,
-            #     0,
-            #     0,
-            #     get_contra_count(fold_vals_list[["12"]]),
-            #     get_contra_count(fold_vals_list[["23"]]),
-            #     get_contra_count(fold_vals_list[["13"]]),
-            #     get_contra_count(fold_vals_list[["123"]])
-            # )
-            
-            # same_counts <- tot_counts - contra_counts
+            contra_counts <- tot_counts - same_counts
             
             df.data <- data.frame(
                 x=c(-1.5, 1.5, 0, 0, 1, -1, 0),
                 y=c(0.8, 0.8, -1.6, 1.3, -0.3, -0.3, 0.15),
                 tot_counts=tot_counts,
-                contra_counts="",
-                same_counts=tot_counts
+                contra_counts=contra_counts,
+                same_counts=same_counts
             )
             df.data$label <- c(
                 tot_counts[1:3],
