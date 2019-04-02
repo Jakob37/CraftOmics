@@ -50,7 +50,7 @@ SignificanceTableVis <- R6Class(
         },
         
         plot_comp_venns = function(sig_table, contrasts, sig_thres=0.1, base_sig_col="adj.P.Val", 
-                                        log2_fold_thres=0, base_fold_name="logFC") {
+                                        log2_fold_thres=0, base_fold_name="logFC", check_greater_than=FALSE) {
             
             contrast_sig <- list()
             folds <- list()
@@ -58,7 +58,12 @@ SignificanceTableVis <- R6Class(
                 
                 sig_col <- paste(contrast, base_sig_col, sep=".")
                 fold_name <- paste(contrast, base_fold_name, sep=".")
-                sigs <- sig_table[[sig_col]] < sig_thres
+                if (!check_greater_than) {
+                    sigs <- sig_table[[sig_col]] < sig_thres
+                }
+                else {
+                    sigs <- sig_table[[sig_col]] > sig_thres
+                }
                 contrast_sig[[contrast]] <- sigs
                 folds[[contrast]] <- sig_table[[fold_name]]
             }
@@ -92,6 +97,17 @@ SignificanceTableVis <- R6Class(
                                           y = c(0, 0),
                                           labels = c(contrasts[ind_out], contrasts[ind_in]))
                     
+                    if (!check_greater_than) {
+                        title <- paste0(base_sig_col, " < ", sig_thres)
+                    }
+                    else {
+                        title <- paste0(base_sig_col, " > ", sig_thres)
+                    }
+                    
+                    if (log2_fold_thres != 0) {
+                        title <- paste0(title, ", |log2 fold| >= ", log2_fold_thres)
+                    }
+                    
                     plt <- ggplot2::ggplot(data=df.venn) +
                         ggforce::geom_circle(
                             ggplot2::aes_string(x0 = "x", y0 = "y", r = 1.5, fill = "labels"), 
@@ -103,8 +119,7 @@ SignificanceTableVis <- R6Class(
                         ggplot2::scale_colour_manual(values = c('cornflowerblue', 'firebrick', 'gold'), guide = FALSE) +
                         ggplot2::labs(fill = NULL) +
                         ggplot2::annotate("text", x = df.vdc$x, y = df.vdc$y, label = df.vdc$label, size = 5) +
-                        ggplot2::ggtitle(paste0(base_sig_col, " < ", sig_thres, 
-                                                ", |log2 fold| >= ", log2_fold_thres))
+                        ggplot2::ggtitle(title)
                     
                     index <- index + 1
                     plts[[index]] <- plt

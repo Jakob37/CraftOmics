@@ -93,13 +93,13 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_hists = function(datasets, input, contrast_suffix) {
             
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             plts <- list()
             for (contrast in contrasts) {
                 
-                target_col <- paste(contrast, input$target_col, sep=".")
+                target_col <- paste(contrast, input$hist_target, sep=".")
                 
                 plt <- ev$pvalhist(dobs[[1]]$adf[[target_col]], na.rm=TRUE, bincount=input$hist_bins) +
                     theme_classic() +
@@ -130,18 +130,39 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_venns = function(datasets, input, contrast_suffix) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             out <- stv$plot_comp_venns(
                 dobs[[1]]$adf, 
                 contrasts, 
-                base_sig_col = input$type,
-                base_fold_name = input$fold_base,
-                sig_thres = input$thres, 
-                log2_fold_thres = input$fold
+                base_sig_col = input$venn_type,
+                base_fold_name = input$venn_fold,
+                sig_thres = input$venn_thres,
+                check_greater_than = input$venn_inverse
+                # log2_fold_thres = input$fold
             )
-            grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$data))
+            grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$stat_data))
+        },
+        
+        do_ma = function(datasets, input, contrast_suffix) {
+            ggplot() + ggtitle("MA currently not implemented") + theme_classic()
+        },
+        
+        do_vulc = function(datasets, input, contrast_suffix) {
+            ggplot() + ggtitle("Vulcano currently not implemented") + theme_classic()
+        },
+        
+        do_spotcheck = function(datasets, input) {
+            ggplot() + ggtitle("Spotcheck currently not implemented") + theme_classic()
+        },
+        
+        do_table = function(datasets, input) {
+            ggplot() + ggtitle("Table currently not implemented") + theme_classic()
+        },
+        
+        do_profile = function(datasets, input) {
+            ggplot() + ggtitle("Profile currently not implemented") + theme_classic()
         },
         
         get_preproc_list = function(datasets, dataset_names, checkgroup) {

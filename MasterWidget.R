@@ -12,13 +12,18 @@ pf <- MasterWidgetPlotFuncs$new()
 
 MasterWidget <- R6Class(
     public = list(
-        general_qual_widget = function(datasets, outlier_sets=NULL, height=800, default_plot="bar", default_cond=NULL, 
+        general_qual_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL, 
                                        interactive=TRUE, contrast_suffix=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
             dataset <- datasets[[1]]
-            
+            if (!is.null(contrast_suffix)) {
+                annot_col_names <- colnames(rowData(dataset))
+                contrasts <- private$get_contrasts_from_suffix(annot_col_names, contrast_suffix)
+                contrast_suffixes <- private$get_suffixes_from_contrast(annot_col_names, contrasts[1])
+            }
+
             if (is.null(default_cond)) {
                 default_cond <- colnames(colData(dataset))[1]
             }
@@ -43,25 +48,12 @@ MasterWidget <- R6Class(
             
             height_step_size <- 50
             
-            # ("Barplot", numericInput(inputId="Barplot_height", "Plot height", value=500, step=height_step_size)),
-            # tabPanel("QQ", numericInput(inputId="QQ_height", "Plot height", value=500, step=height_step_size)),
-            # tabPanel("Density", numericInput(inputId="Density_height", "Plot height", value=500, step=height_step_size)),
-            # tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
-            # tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
-            # tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
-            # tabPanel("Venns",
-            
             shinyApp(
                 ui = fluidPage(
                     
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     
                     titlePanel("Explomics"),
-                    
-                    # id = "tabs",
-                    # type = "tabs",
-                    # tabPanel("Barplot", 
-                    
                     sidebarLayout(
                         sidebarPanel(
                             
@@ -80,8 +72,8 @@ MasterWidget <- R6Class(
                                         selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
                                     ),
                                     conditionalPanel(
-                                        condition = "input.tabs == 'Venn' || input.tabs == 'Hists'",
-                                        selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names)
+                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists'",
+                                        selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names)
                                     ),
                                     
                                     conditionalPanel(
@@ -111,6 +103,7 @@ MasterWidget <- R6Class(
                                     # Histograms
                                     conditionalPanel(
                                         condition = "input.tabs == 'Hists'",
+                                        selectInput("hist_target", "Target col:", selected=contrast_suffix, choices = contrast_suffixes),
                                         numericInput("hist_bins", "Bin count", value=50, min=1, max=100),
                                         selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
                                         checkboxInput("scaleaxis", "Scale Y axes"),
@@ -120,10 +113,10 @@ MasterWidget <- R6Class(
                                     # Venns
                                     conditionalPanel(
                                         condition = "input.tabs == 'Venns'",
-                                        selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
-                                        sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
-                                        sliderInput("fold", "Fold threshold:", value=0, min=0, max=5, step=0.25),
-                                        textInput("fold_base", "Fold base:", value="logFC")
+                                        selectInput("venn_type", "Type:", selected=contrast_suffix, choices = contrast_suffixes),
+                                        selectInput("venn_fold", "Fold col:", selected="logFC", choices = contrast_suffixes),
+                                        sliderInput("venn_thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
+                                        checkboxInput("venn_inverse", "Check if greater than", value=FALSE)
                                     )
                                  ),
                                 tabPanel(
@@ -150,7 +143,12 @@ MasterWidget <- R6Class(
                                 tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
-                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=500, step=height_step_size))
+                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=250, step=height_step_size)),
+                                tabPanel("MA", numericInput(inputId="MA_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Vulc", numericInput(inputId="Vulc_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Spotcheck", numericInput(inputId="Spotcheck_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Table", numericInput(inputId="Table_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Profile", numericInput(inputId="Profile_height", "Plot height", value=500, step=height_step_size))
                             ),
                             uiOutput("BarplotUI")
                         )
@@ -199,6 +197,26 @@ MasterWidget <- R6Class(
                         pf$do_venns(datasets, input, contrast_suffix)
                     })
                     
+                    output$MA = renderPlot({
+                        pf$do_ma(datasets, input, contrast_suffix)
+                    })
+                    
+                    output$Vulc = renderPlot({
+                        pf$do_vulc(datasets, input, contrast_suffix)
+                    })
+                    
+                    output$Spotcheck = renderPlot({
+                        pf$do_spotcheck(datasets, input)
+                    })
+                    
+                    output$Table = renderPlot({
+                        pf$do_table(datasets, input)
+                    })
+                    
+                    output$Profile = renderPlot({
+                        pf$do_profile(datasets, input)
+                    })
+                    
                     output$download <- downloadHandler(
                         
                         filename = function() {
@@ -232,7 +250,6 @@ MasterWidget <- R6Class(
                             }
                             
                             plt <- curr_plot(datasets, input)
-                            
                             inch_width <- input$output_width / input$output_dpi
                             inch_height <- input$output_height / input$output_dpi
                             ggsave(file, plot=plt, device="png", width=inch_width, height=inch_height, units="in", dpi=input$output_dpi)
@@ -258,26 +275,13 @@ MasterWidget <- R6Class(
                     )
 
                     observe({
-                        self$update_input_choices(session, datasets, "cond1", input$data1, input$cond1)
-                        self$update_input_choices(session, datasets, "cond2", input$data2, input$cond2)
-                        self$update_input_choices(session, datasets, "text_labels", input$data1, input$text_labels)
+                        private$update_input_choices(session, datasets, "cond1", input$data1, input$cond1)
+                        private$update_input_choices(session, datasets, "cond2", input$data2, input$cond2)
+                        private$update_input_choices(session, datasets, "text_labels", input$data1, input$text_labels)
+                        private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
                     })
                 },
                 options=list(height=height)
-            )
-        },
-        
-        update_input_choices = function(session, datasets, target, data_name, cond_name) {
-            
-            choices <- colnames(colData(datasets[[data_name]]))
-            if (cond_name %in% choices) selected <- cond_name
-            else selected <- default_cond
-            
-            updateSelectInput(
-                session,
-                target,
-                choices=choices,
-                selected=selected
             )
         },
         
@@ -364,41 +368,7 @@ MasterWidget <- R6Class(
                 options=list(height=height)
             )
         },
-        # venn_widgets = function(stat_data, contrast_suffix, p_col="P.Value", q_col="adj.P.Val", 
-        #                         fold_col="logFC", height=1100) {
-        #     
-        #     dataset_names <- names(stat_data)
-        #     default_name <- dataset_names[1]
-        # 
-        #     shinyApp(
-        #         ui = fluidPage(
-        #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-        #             selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
-        #             sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
-        #             sliderInput("fold", "Fold threshold:", value=0, min=0, max=5, step=0.25),
-        #             plotOutput("plots")
-        #         ),
-        #         server = function(input, output) {
-        #             output$plots = renderPlot({
-        # 
-        #                 contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
-        #                 
-        #                 rdf <- data.frame(rowData(stat_data[[input$data]]))
-        #                 out <- stv$plot_comp_venns(
-        #                     rdf, 
-        #                     contrasts, 
-        #                     base_sig_col = input$type,
-        #                     base_fold_name = fold_col,
-        #                     sig_thres = input$thres, 
-        #                     log2_fold_thres = input$fold
-        #                 )
-        #                 grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$data))
-        #             })
-        #         },
-        #         options=list(height=800)
-        #     )
-        # },
-        
+
         table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
             
             if (is.null(default_selected)) {
@@ -651,6 +621,47 @@ MasterWidget <- R6Class(
             
             if (colorscatter) plt + target_geom(aes(color=color))
             else plt + target_geom(na.rm=TRUE)
+        },
+        update_input_choices = function(session, datasets, target, data_name, cond_name) {
+            
+            choices <- colnames(colData(datasets[[data_name]]))
+            if (cond_name %in% choices) selected <- cond_name
+            else selected <- default_cond
+            
+            updateSelectInput(
+                session,
+                target,
+                choices=choices,
+                selected=selected
+            )
+        },
+        
+        update_input_range = function(session, datasets, target, dataset_name, column_names) {
+            # private$update_input_range(session, datasets, "venn_thres", input$venn_type)
+            # browser()
+            col_data <- rowData(datasets[[dataset_name]])[column_names] %>% unlist()
+            min_val <- round(min(col_data, na.rm=TRUE), digits=2)
+            max_val <- round(max(col_data, na.rm=TRUE), digits=2)
+            updateNumericInput(
+                session,
+                target,
+                min=min_val,
+                max=max_val
+            )
+        },
+        
+        get_contrasts_from_suffix = function(row_data_cols, contrast_suffix) {
+            make.names(
+                gsub(
+                    paste0(".", contrast_suffix), "", 
+                    row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]
+                )
+            )
+        },
+        get_suffixes_from_contrast = function(row_data_cols, contrast) {
+            
+            matching_fields <- row_data_cols[grepl(contrast, row_data_cols)]
+            make.names(gsub(paste0(contrast, "."), "", matching_fields))
         }
     )
 ) 
