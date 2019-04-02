@@ -6,6 +6,7 @@ library(DT)
 library(ggpubr)
 
 # Datasets expected format: Named list linked to SummarizedExperiment instances
+# Does it make sense to weave everything into a single widget?
 
 MasterWidget <- R6Class(
     public = list(
@@ -83,15 +84,19 @@ MasterWidget <- R6Class(
                         )
                     ),
                     
+                    
+                    
                     # Technical
                     tabsetPanel(
                         id = "tabs",
                         type = "tabs",
-                        tabPanel("Barplot", plotOutput("bar")),
-                        tabPanel("QQ", plotOutput("qq")),
-                        tabPanel("Density", plotOutput("density")),
-                        tabPanel("PCA", plotOutput("pca"))
+                        tabPanel("Barplot", numericInput(inputId="Barplot_height", "Plot height", value=500, step=50)),
+                        tabPanel("QQ", numericInput(inputId="QQ_height", "Plot height", value=500, step=50)),
+                        tabPanel("Density", numericInput(inputId="Density_height", "Plot height", value=500, step=50)),
+                        tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=50)),
+                        tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=700, step=50))
                     ),
+                    uiOutput("BarplotUI"),
                     splitLayout(
                         downloadButton(outputId="download", label="Download plot"),
                         downloadButton(outputId="download_params", label="Download parameters")
@@ -105,24 +110,33 @@ MasterWidget <- R6Class(
                 ),
                 server = function(session, input, output) {
                     
-                    output$bar = renderPlot({
-                        curr_plot <<- self$do_bar
-                        curr_plot(datasets, input)
+                    plotHeight <- reactive({
+                        target_name <- paste0(input$tabs, "_height")
+                        input[[target_name]]
                     })
                     
-                    output$qq = renderPlot({
-                        curr_plot <<- self$do_qq
-                        curr_plot(datasets, input)
+                    output$BarplotUI <- renderUI({
+                        plotOutput(input$tabs, height=plotHeight())
+                    })
+
+                    output$Barplot = renderPlot({
+                        self$do_bar(datasets, input)
                     })
                     
-                    output$density = renderPlot({
-                        curr_plot <<- self$do_density
-                        curr_plot(datasets, input)
+                    output$QQ = renderPlot({
+                        self$do_qq(datasets, input)
                     })
                     
-                    output$pca = renderPlot({
-                        curr_plot <<- self$do_pca
-                        curr_plot(datasets, input)
+                    output$Density = renderPlot({
+                        self$do_density(datasets, input)
+                    })
+                    
+                    output$PCA = renderPlot({
+                        self$do_pca(datasets, input)
+                    })
+                    
+                    output$Cluster = renderPlot({
+                        self$do_cluster(datasets, input)
                     })
                     
                     output$download <- downloadHandler(
@@ -257,6 +271,22 @@ MasterWidget <- R6Class(
             
         },
         
+        do_cluster = function(datasets, input) {
+            
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            if (!input$as_label) label <- NULL
+            else label <- dobs[[1]]$ddf[, input$text_labels]
+            
+            plts <- list()
+            for (i in seq_len(2)) {
+                plts[[i]] <- mv$dendogram(
+                    dobs[[i]]$sdf, 
+                    as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]])) + ggtitle(dobs[[i]]$title)
+            }
+            
+            grid.arrange(plts[[1]], plts[[2]], ncol=2)
+        },
+        
         get_preproc_list = function(datasets, dataset_names, checkgroup) {
 
             outliers <- unname(unlist(outlier_sets[checkgroup]))
@@ -292,142 +322,45 @@ MasterWidget <- R6Class(
             )
         },
         
-        pca_widget = function(datasets, outlier_sets=NULL, height=1300, default_cond1=NULL, default_cond2=NULL, default_text="Sample") {
-            
-            dataset_names <- names(datasets)
-            default_name <- dataset_names[1]
-            dataset <- datasets[[1]]
-            
-            if (is.null(default_cond1)) {
-                default_cond1 <- colnames(colData(dataset))[1]
-            }
-            if (is.null(default_cond2)) {
-                default_cond2 <- colnames(colData(dataset))[2]
-            }
-            
-            shinyApp(
-                ui = fluidPage(
-                    tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
-                    splitLayout(
-                        selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                        checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL)
-                    ),
-                    splitLayout(
-                        fluidPage(
-                            checkboxInput("as_label", "Show as text"),
-                            selectInput("text_labels", "Text labels:", selected=default_text, choices=colnames(colData(dataset)))
-                        ),
-                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1)
-                    ),
-                    splitLayout(
-                        selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
-                        selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1)
-                    ),
-                    splitLayout(
-                        selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
-                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
-                    ),
-                    splitLayout(
-                        selectInput("cond_plt1", "Condition (plot1):", selected=default_cond1, choices = colnames(colData(dataset))),
-                        selectInput("cond_plt2", "Condition (plot2):", selected=default_cond2, choices = colnames(colData(dataset)))
-                    ),
-                    plotOutput("pca")
-                ),
-                server = function(session, input, output) {
-                    output$pca = renderPlot({
-                        
-                        dataset <- datasets[[input$data]]
-                        outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        parsed <- self$parse_dataset(dataset, outliers)
-                        
-                        if (!input$as_label) {
-                            label <- NULL
-                        }
-                        else {
-                            label <- parsed$ddf[, input$text_labels]
-                        }
-                        
-                        title1 <- paste0("Cond: ", input$cond_plt1, " PCs: ", input$pc1_plt1, ", ", input$pc2_plt1)
-                        plt1 <- mv$pca(
-                            parsed$sdf, 
-                            as.factor(parsed$ddf[[input$cond_plt1]]), 
-                            pcs=c(as.numeric(input$pc1_plt1), as.numeric(input$pc2_plt1)), 
-                            label=label) + 
-                                ggtitle(title1) + labs(color=input$cond_plt1)
-                        
-                        title2 <- paste0("Cond: ", input$cond_plt2, " PCs: ", input$pc1_plt2, ", ", input$pc2_plt2)
-                        plt2 <- mv$pca(
-                            parsed$sdf, 
-                            as.factor(parsed$ddf[[input$cond_plt2]]), 
-                            pcs=c(as.numeric(input$pc1_plt2), as.numeric(input$pc2_plt2)), 
-                            label=label) + 
-                                ggtitle(title2) + labs(color=input$cond_plt1)
-                        
-                        scree <- mv$plot_component_fraction(parsed$sdf, max_comps=input$pc_comps)
-                        grid.arrange(plt1, plt2, scree, ncol=2)
-                    }, height = 800)
-                    
-                    observe({
-                        cond_choices <- colnames(colData(datasets[[input$data]]))
-                        
-                        selected_1 <- input$cond_plt1
-                        selected_2 <- input$cond_plt2
-                        
-                        if (!selected_1 %in% cond_choices) {
-                            selected_1 <- cond_choices[1]
-                        }
-                        
-                        if (!selected_2 %in% cond_choices) {
-                            selected_2 <- cond_choices[1]
-                        }
-                        
-                        updateSelectInput(session, "cond_plt1", choices=cond_choices, selected=selected_1)
-                        updateSelectInput(session, "cond_plt2", choices=cond_choices, selected=selected_2)
-                        updateSelectInput(session, "text_labels", choices=cond_choices, selected=selected_1)
-                    })
-                },
-                options = list(height=height)
-            )
-        },
-        
-        clustering_widget = function(datasets, outlier_sets=NULL, height=1500, default_cond=NULL) {
-            
-            dataset_names <- names(datasets)
-            default_name <- dataset_names[1]
-            dataset <- datasets[[1]]
-            
-            if (is.null(default_cond)) {
-                default_cond <- colnames(colData(dataset))[1]
-            }
-            
-            shinyApp(
-                ui = fluidPage(
-                    tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
-                    splitLayout(
-                        selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                        selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
-                    ),
-                    checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
-                    plotOutput("plot", width="100%")
-                ),
-                server = function(input, output) {
-                    output$plot = renderPlot({
-                        
-                        dataset <- datasets[[input$data]]
-                        if (!is.null(outlier_sets)) {
-                            outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-                        }
-                        else {
-                            outliers <- NULL
-                        }
-                        parsed <- self$parse_dataset(dataset, outliers)
-                        mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]])) + ggtitle(paste0("Dataset: ", input$data))
-                        
-                    }, height = 1200)
-                },
-                options = list(height=height)
-            )
-        },
+
+        # clustering_widget = function(datasets, outlier_sets=NULL, height=1500, default_cond=NULL) {
+        #     
+        #     dataset_names <- names(datasets)
+        #     default_name <- dataset_names[1]
+        #     dataset <- datasets[[1]]
+        #     
+        #     if (is.null(default_cond)) {
+        #         default_cond <- colnames(colData(dataset))[1]
+        #     }
+        #     
+        #     shinyApp(
+        #         ui = fluidPage(
+        #             tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
+        #             splitLayout(
+        #                 selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+        #                 selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
+        #             ),
+        #             checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
+        #             plotOutput("plot", width="100%")
+        #         ),
+        #         server = function(input, output) {
+        #             output$plot = renderPlot({
+        #                 
+        #                 dataset <- datasets[[input$data]]
+        #                 if (!is.null(outlier_sets)) {
+        #                     outliers <- unname(unlist(outlier_sets[input$checkgroup]))
+        #                 }
+        #                 else {
+        #                     outliers <- NULL
+        #                 }
+        #                 parsed <- self$parse_dataset(dataset, outliers)
+        #                 mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]])) + ggtitle(paste0("Dataset: ", input$data))
+        #                 
+        #             }, height = 1200)
+        #         },
+        #         options = list(height=height)
+        #     )
+        # },
         
         hists_widget = function(stat_data, contrast_suffix, show_cols=c("P.Value", "adj.P.Val", "logFC", "AveExpr"), height=1000) {
             
