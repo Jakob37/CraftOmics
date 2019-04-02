@@ -8,9 +8,12 @@ library(ggpubr)
 # Datasets expected format: Named list linked to SummarizedExperiment instances
 # Does it make sense to weave everything into a single widget?
 
+pf <- MasterWidgetPlotFuncs$new()
+
 MasterWidget <- R6Class(
     public = list(
-        general_qual_widget = function(datasets, outlier_sets=NULL, height=800, default_plot="bar", default_cond=NULL, interactive=TRUE) {
+        general_qual_widget = function(datasets, outlier_sets=NULL, height=800, default_plot="bar", default_cond=NULL, 
+                                       interactive=TRUE, contrast_suffix=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -25,6 +28,8 @@ MasterWidget <- R6Class(
                 return(plt)
             }
             
+            show_cols=c("P.Value", "adj.P.Val", "logFC", "AveExpr")
+            
             all_settings <- c(
                 "tabs",
                 "data1", "data2", "checkgroup",
@@ -34,81 +39,128 @@ MasterWidget <- R6Class(
                 "output_path", "output_width", "output_height", "output_dpi"
             )
             
+            explore_plots <- c("Barplot", "QQ", "Density", "PCA", "Cluster")
+            
+            height_step_size <- 50
+            
+            # ("Barplot", numericInput(inputId="Barplot_height", "Plot height", value=500, step=height_step_size)),
+            # tabPanel("QQ", numericInput(inputId="QQ_height", "Plot height", value=500, step=height_step_size)),
+            # tabPanel("Density", numericInput(inputId="Density_height", "Plot height", value=500, step=height_step_size)),
+            # tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
+            # tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
+            # tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
+            # tabPanel("Venns",
+            
             shinyApp(
                 ui = fluidPage(
                     
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     
-                    # General
-                    splitLayout(
-                        selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names),
-                        selectInput("data2", "Dataset 2:", selected=default_name, choices=dataset_names),
-                        checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL)
-                    ),
-                    splitLayout(
-                        selectInput("cond1", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
-                        selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
-                    ),
+                    titlePanel("Explomics"),
                     
-                    conditionalPanel(
-                        condition = "input.tabs == 'Barplot'",
-                        splitLayout(
-                            checkboxInput("show_na", "Show NA counts", value=FALSE),
-                            checkboxInput("show_mean", "Show mean", value=FALSE)
-                        )
-                    ),
+                    # id = "tabs",
+                    # type = "tabs",
+                    # tabPanel("Barplot", 
                     
-                    conditionalPanel(
-                        condition = "input.tabs == 'QQ' || input.tabs == 'Density'",
-                        splitLayout(
-                            numericInput("subset", "Partial data:", value=1000, min=100, max=nrow(assay(dataset))),
-                            checkboxInput("fulldata", "Use full data", value = FALSE)
-                        )
-                    ),
-                    
-                    # Principal component
-                    conditionalPanel(
-                        condition = "input.tabs == 'PCA'",
-                        splitLayout(
-                            checkboxInput("as_label", "Show as text"),
-                            selectInput("text_labels", "Text labels:", selected=default_cond, choices=colnames(colData(dataset)))
+                    sidebarLayout(
+                        sidebarPanel(
+                            
+                            tabsetPanel(
+                                id = "options_tabs",
+                                type = "tabs",
+                                tabPanel(
+                                    "Settings",
+                                    # General
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Barplot' || input.tabs == 'QQ' || input.tabs == 'Density' || input.tabs == 'PCA' || input.tabs == 'Cluster'",
+                                        selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names),
+                                        selectInput("data2", "Dataset 2:", selected=default_name, choices=dataset_names),
+                                        checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
+                                        selectInput("cond1", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
+                                        selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
+                                    ),
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Venn' || input.tabs == 'Hists'",
+                                        selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names)
+                                    ),
+                                    
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Barplot'",
+                                        checkboxInput("show_na", "Show NA counts", value=FALSE),
+                                        checkboxInput("show_mean", "Show mean", value=FALSE)
+                                    ),
+                                    
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'QQ' || input.tabs == 'Density'",
+                                        numericInput("subset", "Partial data:", value=500, min=100, max=nrow(assay(dataset))),
+                                        checkboxInput("fulldata", "Use full data", value = FALSE)
+                                    ),
+                                    
+                                    # Principal component
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'PCA'",
+                                        checkboxInput("as_label", "Show as text"),
+                                        selectInput("text_labels", "Text labels:", selected=default_cond, choices=colnames(colData(dataset))),
+                                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1),
+                                        selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
+                                        selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1),
+                                        selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
+                                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
+                                    ),
+                                    
+                                    # Histograms
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Hists'",
+                                        numericInput("hist_bins", "Bin count", value=50, min=1, max=100),
+                                        selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
+                                        checkboxInput("scaleaxis", "Scale Y axes"),
+                                        checkboxInput("limitxaxis", "Limit X axes")
+                                    ),
+                                    
+                                    # Venns
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Venns'",
+                                        selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
+                                        sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
+                                        sliderInput("fold", "Fold threshold:", value=0, min=0, max=5, step=0.25),
+                                        textInput("fold_base", "Fold base:", value="logFC")
+                                    )
+                                 ),
+                                tabPanel(
+                                    "Download",
+                                    fluidRow(
+                                        textInput(inputId="output_path", label="Path"),
+                                        numericInput(inputId="output_width", label="Width", value=2000),
+                                        numericInput(inputId="output_height", label="Height", value=1000),
+                                        numericInput(inputId="output_dpi", label="DPI", value=150),
+                                        downloadButton(outputId="download", label="Download plot"),
+                                        downloadButton(outputId="download_params", label="Download parameters")
+                                    )
+                                )
+                            )
                         ),
-                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1),
-                        splitLayout(
-                            selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
-                            selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1)
-                        ),
-                        splitLayout(
-                            selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
-                            selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
+                        mainPanel(
+                            # Technical
+                            tabsetPanel(
+                                id = "tabs",
+                                type = "tabs",
+                                tabPanel("Barplot", numericInput(inputId="Barplot_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("QQ", numericInput(inputId="QQ_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Density", numericInput(inputId="Density_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=500, step=height_step_size))
+                            ),
+                            uiOutput("BarplotUI")
                         )
-                    ),
-                    
-                    
-                    
-                    # Technical
-                    tabsetPanel(
-                        id = "tabs",
-                        type = "tabs",
-                        tabPanel("Barplot", numericInput(inputId="Barplot_height", "Plot height", value=500, step=50)),
-                        tabPanel("QQ", numericInput(inputId="QQ_height", "Plot height", value=500, step=50)),
-                        tabPanel("Density", numericInput(inputId="Density_height", "Plot height", value=500, step=50)),
-                        tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=50)),
-                        tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=700, step=50))
-                    ),
-                    uiOutput("BarplotUI"),
-                    splitLayout(
-                        downloadButton(outputId="download", label="Download plot"),
-                        downloadButton(outputId="download_params", label="Download parameters")
-                    ),
-                    splitLayout(
-                        textInput(inputId="output_path", label="Path"),
-                        numericInput(inputId="output_width", label="Width", value=2000),
-                        numericInput(inputId="output_height", label="Height", value=1000),
-                        numericInput(inputId="output_dpi", label="DPI", value=150)
                     )
                 ),
                 server = function(session, input, output) {
+                    
+                    if (is.null(contrast_suffix)) {
+                        hideTab(inputId="tabs", target="Hists")
+                    }
                     
                     plotHeight <- reactive({
                         target_name <- paste0(input$tabs, "_height")
@@ -120,23 +172,31 @@ MasterWidget <- R6Class(
                     })
 
                     output$Barplot = renderPlot({
-                        self$do_bar(datasets, input)
+                        pf$do_bar(datasets, input)
                     })
                     
                     output$QQ = renderPlot({
-                        self$do_qq(datasets, input)
+                        pf$do_qq(datasets, input)
                     })
                     
                     output$Density = renderPlot({
-                        self$do_density(datasets, input)
+                        pf$do_density(datasets, input)
                     })
                     
                     output$PCA = renderPlot({
-                        self$do_pca(datasets, input)
+                        pf$do_pca(datasets, input)
                     })
                     
                     output$Cluster = renderPlot({
-                        self$do_cluster(datasets, input)
+                        pf$do_cluster(datasets, input)
+                    })
+                    
+                    output$Hists = renderPlot({
+                        pf$do_hists(datasets, input, contrast_suffix)
+                    })
+                    
+                    output$Venns = renderPlot({
+                        pf$do_venns(datasets, input, contrast_suffix)
                     })
                     
                     output$download <- downloadHandler(
@@ -147,16 +207,25 @@ MasterWidget <- R6Class(
                         content = function(file) {
                             
                             if (input$tabs == "Barplot") {
-                                curr_plot <- self$do_bar
+                                curr_plot <- pf$do_bar
                             }
                             else if (input$tabs == "QQ") {
-                                curr_plot <- self$do_qq
+                                curr_plot <- pf$do_qq
                             }
                             else if (input$tabs == "Density") {
-                                curr_plot <- self$do_density
+                                curr_plot <- pf$do_density
                             }
                             else if (input$tabs == "PCA") {
-                                curr_plot <- self$do_pca
+                                curr_plot <- pf$do_pca
+                            }
+                            else if (input$tabs == "Cluster") {
+                                curr_plot <- pf$do_cluster
+                            }
+                            else if (input$tabs == "Hists") {
+                                curr_plot <- pf$do_hists
+                            }
+                            else if (input$tabs == "Venns") {
+                                curr_plot <- pf$do_venns
                             }
                             else {
                                 stop("Unknown option: ", input$tabs)
@@ -198,116 +267,6 @@ MasterWidget <- R6Class(
             )
         },
         
-        do_bar = function(datasets, input) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
-            plts <- list()
-            for (i in seq_len(2)) {
-                plts[[i]] <- ev$abundance_bars(
-                    dobs[[i]]$sdf, 
-                    color_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
-                    title=dobs[[i]]$title, 
-                    show_missing=input$show_na, 
-                    show_average=input$show_mean
-                )
-            }
-            
-            grid.arrange(plts[[1]], plts[[2]])
-        },
-        
-        do_density = function(datasets, input) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
-            if (input$fulldata) usecount <- NULL
-            else usecount <- input$subset
-            
-            plts <- list()
-            for (i in seq_len(2)) {
-                plts[[i]] <- ev$sample_dist(
-                    dobs[[i]]$sdf, 
-                    color_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
-                    title=dobs[[1]]$title, 
-                    max_count=usecount
-                )
-            }
-            
-            grid.arrange(plts[[1]], plts[[2]])
-        },
-        
-        do_qq = function(datasets, input) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
-            if (input$fulldata) usecount <- NULL
-            else usecount <- input$subset
-            
-            plts <- list()
-            for (i in seq_len(2)) {
-                plts[[i]] <- ev$qq(
-                    dobs[[i]]$sdf, 
-                    title=dobs[[i]]$title, 
-                    cond_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
-                    max_count=usecount
-                )
-            }
-            
-            grid.arrange(plts[[1]], plts[[2]])
-        },
-        
-        do_pca = function(datasets, input) {
-            
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
-            if (!input$as_label) label <- NULL
-            else label <- dobs[[1]]$ddf[, input$text_labels]
-            
-            plts <- list()
-            for (i in seq_len(2)) {
-                plts[[i]] <- mv$pca(
-                    dobs[[i]]$sdf,
-                    as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]),
-                    pcs=c(as.numeric(input[[paste0("pc1_plt", i)]]), as.numeric(input[[paste0("pc2_plt", i)]])),
-                    label=label
-                ) + ggtitle(dobs[[i]]$title)
-            }
-            scree <- mv$plot_component_fraction(dobs[[1]]$sdf, max_comps=input$pc_comps)
-            
-            grid.arrange(plts[[1]], plts[[2]], scree, ncol=2)
-            
-        },
-        
-        do_cluster = function(datasets, input) {
-            
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
-            if (!input$as_label) label <- NULL
-            else label <- dobs[[1]]$ddf[, input$text_labels]
-            
-            plts <- list()
-            for (i in seq_len(2)) {
-                plts[[i]] <- mv$dendogram(
-                    dobs[[i]]$sdf, 
-                    as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]])) + ggtitle(dobs[[i]]$title)
-            }
-            
-            grid.arrange(plts[[1]], plts[[2]], ncol=2)
-        },
-        
-        get_preproc_list = function(datasets, dataset_names, checkgroup) {
-
-            outliers <- unname(unlist(outlier_sets[checkgroup]))
-                        
-            dataset_objs <- list()
-            for (i in seq_len(length(dataset_names))) {
-                
-                dataset_obj <- list()
-                dataset_name <- dataset_names[i]
-                dataset_obj$dataset <- datasets[[dataset_name]]
-                parsed <- self$parse_dataset(dataset_obj$dataset, outliers)
-                dataset_obj$sdf <- parsed$sdf
-                dataset_obj$ddf <- parsed$ddf
-                dataset_obj$title <- paste("Dataset:", dataset_name)
-                dataset_obj$outliers <- outliers
-                dataset_objs[[i]] <- dataset_obj
-            }
-            
-            dataset_objs
-        },
-        
         update_input_choices = function(session, datasets, target, data_name, cond_name) {
             
             choices <- colnames(colData(datasets[[data_name]]))
@@ -319,106 +278,6 @@ MasterWidget <- R6Class(
                 target,
                 choices=choices,
                 selected=selected
-            )
-        },
-        
-
-        # clustering_widget = function(datasets, outlier_sets=NULL, height=1500, default_cond=NULL) {
-        #     
-        #     dataset_names <- names(datasets)
-        #     default_name <- dataset_names[1]
-        #     dataset <- datasets[[1]]
-        #     
-        #     if (is.null(default_cond)) {
-        #         default_cond <- colnames(colData(dataset))[1]
-        #     }
-        #     
-        #     shinyApp(
-        #         ui = fluidPage(
-        #             tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
-        #             splitLayout(
-        #                 selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-        #                 selectInput("cond", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
-        #             ),
-        #             checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
-        #             plotOutput("plot", width="100%")
-        #         ),
-        #         server = function(input, output) {
-        #             output$plot = renderPlot({
-        #                 
-        #                 dataset <- datasets[[input$data]]
-        #                 if (!is.null(outlier_sets)) {
-        #                     outliers <- unname(unlist(outlier_sets[input$checkgroup]))
-        #                 }
-        #                 else {
-        #                     outliers <- NULL
-        #                 }
-        #                 parsed <- self$parse_dataset(dataset, outliers)
-        #                 mv$dendogram(parsed$sdf, as.factor(parsed$ddf[[input$cond]])) + ggtitle(paste0("Dataset: ", input$data))
-        #                 
-        #             }, height = 1200)
-        #         },
-        #         options = list(height=height)
-        #     )
-        # },
-        
-        hists_widget = function(stat_data, contrast_suffix, show_cols=c("P.Value", "adj.P.Val", "logFC", "AveExpr"), height=1000) {
-            
-            dataset_names <- names(stat_data)
-            default_name <- dataset_names[1]
-            
-            shinyApp(
-                ui = fluidPage(
-                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                    numericInput("bins", "Bin count", value=50, min=1, max=100),
-                    selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
-                    splitLayout(
-                        checkboxInput("scaleaxis", "Scale Y axes"),
-                        checkboxInput("limitxaxis", "Limit X axes")
-                    ),
-                    plotOutput("plots", height=200)
-                ),
-                server = function(input, output) {
-                    
-                    output$plots = renderPlot({
-                        
-                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
-                                                
-                        rdf <- data.frame(rowData(stat_data[[input$data]]), stringsAsFactors = FALSE)
-                        plts <- list()
-                        for (contrast in contrasts) {
-                            
-                            target_col <- paste(contrast, input$target_col, sep=".")
-                            
-                            plt <- ev$pvalhist(rdf[[target_col]], na.rm=TRUE, bincount=input$bins) +
-                                theme_classic() +
-                                scale_fill_brewer(palette="Dark2") +
-                                ggtitle(contrast) 
-
-                            if (input$limitxaxis) {
-                                xmin <- min(as.numeric(rdf[[target_col]]), na.rm = TRUE) - 0.01
-                                xmax <- max(as.numeric(rdf[[target_col]]), na.rm = TRUE) + 0.01
-                                plt <- plt + xlim(xmin, xmax)
-                            }
-                            
-                            plts[[contrast]] <- plt
-                        }
-                        
-                        if (input$scaleaxis) {
-                            max_y_vals <- lapply(plts, function(plt) {
-                                layer_scales(plt)$y$range$range[2]
-                            })
-                            
-                            plts <- lapply(plts, function(plt) {
-                                plt <- plt + 
-                                    ylim(0, 1.01 * max(unlist(max_y_vals)))
-                            })
-                        }
-                        
-                        grid.arrange(grobs=plts, ncol=1, top=paste0("Dataset: ", input$data))
-                    }, height = 500)
-                },
-                options=list(height=height)
             )
         },
         
@@ -505,40 +364,40 @@ MasterWidget <- R6Class(
                 options=list(height=height)
             )
         },
-        venn_widgets = function(stat_data, contrast_suffix, p_col="P.Value", q_col="adj.P.Val", 
-                                fold_col="logFC", height=1100) {
-            
-            dataset_names <- names(stat_data)
-            default_name <- dataset_names[1]
-
-            shinyApp(
-                ui = fluidPage(
-                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                    selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
-                    sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
-                    sliderInput("fold", "Fold threshold:", value=0, min=0, max=5, step=0.25),
-                    plotOutput("plots")
-                ),
-                server = function(input, output) {
-                    output$plots = renderPlot({
-
-                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
-                        
-                        rdf <- data.frame(rowData(stat_data[[input$data]]))
-                        out <- stv$plot_comp_venns(
-                            rdf, 
-                            contrasts, 
-                            base_sig_col = input$type,
-                            base_fold_name = fold_col,
-                            sig_thres = input$thres, 
-                            log2_fold_thres = input$fold
-                        )
-                        grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$data))
-                    })
-                },
-                options=list(height=800)
-            )
-        },
+        # venn_widgets = function(stat_data, contrast_suffix, p_col="P.Value", q_col="adj.P.Val", 
+        #                         fold_col="logFC", height=1100) {
+        #     
+        #     dataset_names <- names(stat_data)
+        #     default_name <- dataset_names[1]
+        # 
+        #     shinyApp(
+        #         ui = fluidPage(
+        #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+        #             selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
+        #             sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
+        #             sliderInput("fold", "Fold threshold:", value=0, min=0, max=5, step=0.25),
+        #             plotOutput("plots")
+        #         ),
+        #         server = function(input, output) {
+        #             output$plots = renderPlot({
+        # 
+        #                 contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
+        #                 
+        #                 rdf <- data.frame(rowData(stat_data[[input$data]]))
+        #                 out <- stv$plot_comp_venns(
+        #                     rdf, 
+        #                     contrasts, 
+        #                     base_sig_col = input$type,
+        #                     base_fold_name = fold_col,
+        #                     sig_thres = input$thres, 
+        #                     log2_fold_thres = input$fold
+        #                 )
+        #                 grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$data))
+        #             })
+        #         },
+        #         options=list(height=800)
+        #     )
+        # },
         
         table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
             
@@ -746,38 +605,10 @@ MasterWidget <- R6Class(
                 },
                 options=list(height=height)
             )
-        },
-        parse_dataset = function(dataset, outliers=NULL, target_assay=1) {
-            
-            # browser()
-            
-            if (typeof(target_assay) == "character" && !(target_assay %in% names(assays(dataset)))) {
-                stop("Unknown character target_assay: ", target_assay)
-            }
-            
-            if (!is.null(outliers)) {
-                non_outliers <- colnames(dataset)[!colnames(dataset) %in% outliers]
-            }
-            else {
-                non_outliers <- colnames(dataset)
-            }
-            
-            sdf <- assays(dataset)[[target_assay]][, non_outliers]
-            ddf <- data.frame(colData(dataset)) %>% filter(sample %in% non_outliers)
-            adf <- rowData(dataset) %>% data.frame()
-            list("sdf"=sdf, "ddf"=ddf, "adf"=adf)
         }
     ),
     private = list(
         make_scale = 1.01,
-        get_contrasts_from_suffix = function(dataset, contrast_suffix) {
-            
-            row_data_cols <- colnames(rowData(dataset)) 
-            
-            make.names(gsub(
-                paste0(".", contrast_suffix), "", 
-                row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]))
-        },
         make_scatter = function(row_ses, title, show_labels, color, label_type, corr_col) {
             
             fert_vals <- colData(row_ses)[[corr_col]]
