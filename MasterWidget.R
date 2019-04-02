@@ -167,7 +167,12 @@ MasterWidget <- R6Class(
                     })
                     
                     output$BarplotUI <- renderUI({
-                        plotOutput(input$tabs, height=plotHeight())
+                        if (input$tabs != "Table") {
+                            plotOutput(input$tabs, height=plotHeight())
+                        }
+                        else {
+                            DT::DTOutput("Table")
+                        }
                     })
 
                     output$Barplot = renderPlot({
@@ -210,8 +215,22 @@ MasterWidget <- R6Class(
                         pf$do_spotcheck(datasets, input)
                     })
                     
-                    output$Table = renderPlot({
-                        pf$do_table(datasets, input)
+                    output$Table = renderTable({
+                        # pf$do_table(datasets, input)
+                        
+                        browser()
+                        
+                        table <- datasets[[input$data1]] %>% rowData() %>% data.frame()
+                        DT::renderDataTable({
+                            table
+                        })
+                        
+                        # Think here to properly incorporate the combination of:
+                        
+                        # - Interactive data filtering in background
+                        # - Display of the table
+                        
+                        
                     })
                     
                     output$Profile = renderPlot({
@@ -370,95 +389,95 @@ MasterWidget <- R6Class(
             )
         },
 
-        table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
-            
-            if (is.null(default_selected)) {
-                default_selected <- colnames(rowData(stat_data[[1]]))
-            }
-            dataset_names <- names(stat_data)
-            default_name <- dataset_names[1]
-            full_annotation <- rowData(stat_data[[1]])
-
-            shinyApp(
-                ui = fluidPage(
-                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                    selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
-                    selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_filter),
-                    splitLayout(
-                        sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
-                        sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
-                    ),
-                    checkboxInput("exclusive", "Only show significant in all groups"),
-                    downloadButton('download', "Download Table"),
-                    DT::dataTableOutput("table")
-                ),
-                server = function(input, output, session) {
-                    
-                    thedata <- reactive({
-                        
-                        retained <- rowData(stat_data[[input$data]]) %>% data.frame()
-                        if (length(input$filters) > 0) {
-                            
-                            if (input$exclusive) {
-                                unique_retained <- retained
-                                
-                                # Only include features passing all filters
-                                for (filter in input$filters) {
-                                    unique_retained <- unique_retained %>% filter(UQ(as.name(filter)) < input$filterthres)
-                                }
-                                retained <- unique_retained
-                            }
-                            else {
-                                all_retained <- NULL
-                                for (filter in input$filters) {
-                                    # Include features passing at least one filter
-                                    filter_retained <- retained %>% filter(UQ(as.name(filter)) < input$filterthres)
-                                    all_retained <- rbind(all_retained, filter_retained)
-                                }
-                                retained <- all_retained %>% distinct()
-                            }
-                        }
-                        
-                        filtered_selected <- retained %>% 
-                            dplyr::select(input$fields) %>%
-                            data.frame()
-
-                        filtered_selected
-                    })
-                    
-                    observe({
-                        new_choices <- colnames(rowData(stat_data[[input$data]]))
-                        updateSelectInput(
-                            session,
-                            "fields",
-                            choices=new_choices,
-                            selected=input$fields
-                        )
-                    })
-                    
-                    output$table = DT::renderDataTable({
-                        
-                        thedata() %>% 
-                            datatable(options=list(
-                                pageLength=10, 
-                                scrollX=TRUE,
-                                # autoWidth=TRUE,
-                                columnDefs=list(list(width="10px", targets="_all"))
-                            )) %>%
-                            DT::formatRound(columns=input$fields, digits=input$decimals)
-                    })
-                    
-                    output$download <- downloadHandler(
-                        filename = function() {"result_table.tsv"},
-                        content = function(fname) {
-                            write_tsv(thedata(), fname)
-                        } 
-                    )
-                },
-                options=list(height=height)
-            )
-            
-        },
+        # table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
+        #     
+        #     if (is.null(default_selected)) {
+        #         default_selected <- colnames(rowData(stat_data[[1]]))
+        #     }
+        #     dataset_names <- names(stat_data)
+        #     default_name <- dataset_names[1]
+        #     full_annotation <- rowData(stat_data[[1]])
+        # 
+        #     shinyApp(
+        #         ui = fluidPage(
+        #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+        #             selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
+        #             selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_filter),
+        #             splitLayout(
+        #                 sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
+        #                 sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
+        #             ),
+        #             checkboxInput("exclusive", "Only show significant in all groups"),
+        #             downloadButton('download', "Download Table"),
+        #             DT::dataTableOutput("table")
+        #         ),
+        #         server = function(input, output, session) {
+        #             
+        #             thedata <- reactive({
+        #                 
+        #                 retained <- rowData(stat_data[[input$data]]) %>% data.frame()
+        #                 if (length(input$filters) > 0) {
+        #                     
+        #                     if (input$exclusive) {
+        #                         unique_retained <- retained
+        #                         
+        #                         # Only include features passing all filters
+        #                         for (filter in input$filters) {
+        #                             unique_retained <- unique_retained %>% filter(UQ(as.name(filter)) < input$filterthres)
+        #                         }
+        #                         retained <- unique_retained
+        #                     }
+        #                     else {
+        #                         all_retained <- NULL
+        #                         for (filter in input$filters) {
+        #                             # Include features passing at least one filter
+        #                             filter_retained <- retained %>% filter(UQ(as.name(filter)) < input$filterthres)
+        #                             all_retained <- rbind(all_retained, filter_retained)
+        #                         }
+        #                         retained <- all_retained %>% distinct()
+        #                     }
+        #                 }
+        #                 
+        #                 filtered_selected <- retained %>% 
+        #                     dplyr::select(input$fields) %>%
+        #                     data.frame()
+        # 
+        #                 filtered_selected
+        #             })
+        #             
+        #             observe({
+        #                 new_choices <- colnames(rowData(stat_data[[input$data]]))
+        #                 updateSelectInput(
+        #                     session,
+        #                     "fields",
+        #                     choices=new_choices,
+        #                     selected=input$fields
+        #                 )
+        #             })
+        #             
+        #             output$table = DT::renderDataTable({
+        #                 
+        #                 thedata() %>% 
+        #                     datatable(options=list(
+        #                         pageLength=10, 
+        #                         scrollX=TRUE,
+        #                         # autoWidth=TRUE,
+        #                         columnDefs=list(list(width="10px", targets="_all"))
+        #                     )) %>%
+        #                     DT::formatRound(columns=input$fields, digits=input$decimals)
+        #             })
+        #             
+        #             output$download <- downloadHandler(
+        #                 filename = function() {"result_table.tsv"},
+        #                 content = function(fname) {
+        #                     write_tsv(thedata(), fname)
+        #                 } 
+        #             )
+        #         },
+        #         options=list(height=height)
+        #     )
+        #     
+        # },
         spotcheck_widget = function(stat_data, id_col, contrast_suffix, contrast_cond, split_col=NULL,
                                     base_height=600, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
                                     outlier_sets=NULL, default_label=NULL) {
