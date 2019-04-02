@@ -133,16 +133,34 @@ MasterWidgetPlotFuncs <- R6Class(
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
-            out <- stv$plot_comp_venns(
-                dobs[[1]]$adf, 
-                contrasts, 
-                base_sig_col = input$venn_type,
-                base_fold_name = input$venn_fold,
-                sig_thres = input$venn_thres,
-                check_greater_than = input$venn_inverse
-                # log2_fold_thres = input$fold
-            )
-            grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$stat_data))
+            if (!input$threeway_venn) {
+                out <- stv$plot_comp_venns(
+                    dobs[[1]]$adf, 
+                    contrasts, 
+                    base_sig_col = input$venn_type,
+                    base_fold_name = input$venn_fold,
+                    sig_thres = input$venn_thres,
+                    check_greater_than = input$venn_inverse
+                    # log2_fold_thres = input$fold
+                )
+                grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$stat_data))
+            }
+            else {
+                target_contrasts <- contrasts[1:3]
+                if (length(target_contrasts) != length(contrasts)) {
+                    warning("Performing threeway-venn only for first three contrasts")
+                }
+                stv$threeway_venn(
+                    dobs[[1]]$adf,
+                    contrasts,
+                    thres_col_base=input$venn_type,
+                    thres=input$venn_thres,
+                    fold_col_base=input$venn_fold,
+                    check_greater_than=input$venn_inverse
+                )
+                
+            }
+            
         },
         
         do_ma = function(datasets, input, contrast_suffix) {

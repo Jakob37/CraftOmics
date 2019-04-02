@@ -49,8 +49,113 @@ SignificanceTableVis <- R6Class(
             p
         },
         
+        threeway_venn = function(sig_table, contrasts, thres_col_base, thres, fold_col_base="logFC",
+                                 check_greater_than=FALSE) {
+
+            # browser()
+            
+            thres_cols <- paste(contrasts, thres_col_base, sep=".")
+            fold_cols <- paste(contrasts, fold_col_base, sep=".")
+            
+            sig_vals <- apply(sig_table[, thres_cols], 2, function(col, thres, inverse) {
+                if (!inverse) {
+                    col < thres
+                }
+                else {
+                    col > thres
+                }
+            }, thres=thres, inverse=check_greater_than)
+            
+            fold_signs <- apply(sig_table[, fold_cols], 2, function(col) {
+                col > 0
+            })
+            
+            sig_vals_list <- list()
+            fold_vals_list <- list()
+            comps <- list(c(1,2), c(2,3), c(1,3), c(1,2,3))
+            for (comp in comps) {
+                sig_vals_list[[paste(comp, collapse="")]] <- sig_vals[complete.cases(sig_vals[, comp]), comp]
+                fold_vals_list[[paste(comp, collapse="")]] <- fold_signs[complete.cases(fold_signs[, comp]), comp]
+            }
+            
+            circle_spacing <- 0.6
+            df.circles <- data.frame(
+                x = c(-circle_spacing, circle_spacing, 0),
+                y = c(circle_spacing, circle_spacing, -circle_spacing),
+                labels = contrasts
+            )
+            
+            count_true_rows <- function(df) {
+                length(which(apply(df, 1, all)))
+            }
+            
+            c123 <- count_true_rows(sig_vals_list[["123"]])
+            c12 <- count_true_rows(sig_vals_list[["12"]]) - c123
+            c23 <- count_true_rows(sig_vals_list[["23"]]) - c123
+            c13 <- count_true_rows(sig_vals_list[["13"]]) - c123
+            c1 <- length(which(sig_vals[, 1])) - c12 - c13 - c123
+            c2 <- length(which(sig_vals[, 2])) - c12 - c23 - c123
+            c3 <- length(which(sig_vals[, 3])) - c13 - c23 - c123
+            
+            tot_counts <- c(
+                c1,
+                c2,
+                c3,
+                c12,
+                c23,
+                c13,
+                c123
+            )
+            
+            get_contra_count <- function(folds) {
+                contra_folds <- apply(folds, 1, function(row) {
+                    length(unique(row)) == 1
+                })
+                length(which(contra_folds))
+            }
+            
+            # contra_counts <- c(
+            #     0,
+            #     0,
+            #     0,
+            #     get_contra_count(fold_vals_list[["12"]]),
+            #     get_contra_count(fold_vals_list[["23"]]),
+            #     get_contra_count(fold_vals_list[["13"]]),
+            #     get_contra_count(fold_vals_list[["123"]])
+            # )
+            
+            # same_counts <- tot_counts - contra_counts
+            
+            df.data <- data.frame(
+                x=c(-1.5, 1.5, 0, 0, 1, -1, 0),
+                y=c(0.8, 0.8, -1.6, 1.3, -0.3, -0.3, 0.15),
+                tot_counts=tot_counts,
+                contra_counts="",
+                same_counts=tot_counts
+            )
+            df.data$label <- c(
+                tot_counts[1:3],
+                paste(df.data$same_counts[4:7], df.data$contra_counts[4:7], sep="\n")
+            )
+            
+            ggplot(data=df.circles) +
+                ggforce::geom_circle(
+                    aes_string(x0="x", y0="y", r=1.5, fill="labels"),
+                    alpha=0.2, size=0.5, color="darkgray"
+                ) +
+                coord_fixed() +
+                theme_void() +
+                theme(legend.position="right", legend.direction="vertical") +
+                scale_fill_manual(values = c("#009900", "#000099", "#990000")) +
+                scale_color_manual(values = c("#009900", "#000099", "#990000"), guide=FALSE) +
+                labs(fill=NULL) +
+                annotate("text", x=df.data$x, y=df.data$y, label=df.data$label, size=5) +
+                ggtitle("") + theme(plot.title = element_text(hjust=0.5))
+            
+        },
+        
         plot_comp_venns = function(sig_table, contrasts, sig_thres=0.1, base_sig_col="adj.P.Val", 
-                                        log2_fold_thres=0, base_fold_name="logFC", check_greater_than=FALSE) {
+                                   log2_fold_thres=0, base_fold_name="logFC", check_greater_than=FALSE) {
             
             contrast_sig <- list()
             folds <- list()

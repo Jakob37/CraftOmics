@@ -116,7 +116,8 @@ MasterWidget <- R6Class(
                                         selectInput("venn_type", "Type:", selected=contrast_suffix, choices = contrast_suffixes),
                                         selectInput("venn_fold", "Fold col:", selected="logFC", choices = contrast_suffixes),
                                         sliderInput("venn_thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
-                                        checkboxInput("venn_inverse", "Check if greater than", value=FALSE)
+                                        checkboxInput("venn_inverse", "Check if greater than", value=FALSE),
+                                        checkboxInput("threeway_venn", "Three-way Venn", value=FALSE)
                                     )
                                  ),
                                 tabPanel(
