@@ -5,58 +5,61 @@ library(wCorr)
 
 StatTools <- R6Class(
     public = list(
-        calc_corr_column = function(df, ref_levels, method="spearman") {
 
-            valids <- c("spearman", "pearson")
+        calc_pearson_table = function(df, ref_levels, min_vals=5, weights=NULL, retain_status=FALSE) {
 
-            if (!method %in% valids) {
-                stop(paste("Unknown correlation method: ", method))
-            }
-
-            corr_vals <- apply(df, 1, function(row) { cor(x=ref_levels, y=row, method=method, use="complete.obs") })
-        },
-
-        calc_pearson_table = function(df, ref_levels, min_vals=4, weights=NULL) {
-
-            cor.test.na <- function(...) {
-                res <- try(cor.test(...), silent=TRUE)
-                ifelse (class(res) == "try-error", NA, res$p.value)
-            }
-
-            corr_vals <- apply(df, 1, function(row) {
-                ifelse(length(which(!is.na(row))) < min_vals, NA, cor(x=row, y=ref_levels, method="pearson", use="complete.obs"))
-            })
-            
-            if (!is.null(weights)) {
-                    weighted_corr_vals <- apply(
-                        df, 
-                        1, 
-                        function(row) {
-                        ifelse(
-                            length(which(!is.na(row))) < min_vals, 
-                            NA, 
-                            wCorr::weightedCorr(
-                                x=row[!is.na(row)], 
-                                y=ref_levels[!is.na(row)], 
-                                method="pearson", 
-                                weights=weights[!is.na(row)])
-                        )
+            corr_val_table <- apply(df, 1, function(row) {
+                non_na <- which(!is.na(row))
+                # Too few valid values
+                if (length(non_na) < min_vals) {
+                    corr_val <- NA
+                    corr_pval <- NA
+                    wcorr_val <- NA
+                    status <- "too_few"
+                }
+                # Outcome variable only has one level
+                else if (length(unique(ref_levels[non_na])) == 1) {
+                    corr_val <- NA
+                    corr_pval <- NA
+                    wcorr_val <- NA
+                    status <- "one_ref"
+                }
+                else {
+                    corr_val <- cor(x=row[non_na], y=ref_levels[non_na], method="pearson", use="complete.obs")
+                    corr_pval <- cor.test(x=row[non_na], y=ref_levels[non_na], method="pearson", use="complete.obs")$p.value
+                    if (!is.null(weights)) {
+                        wcorr_val <- wCorr::weightedCorr(x=row[non_na], y=ref_levels[non_na], method="pearson", weights=weights[non_na])
                     }
-                )
-            }
-            
-            corr_ps <- apply(df, 1, function(row) {
-                ifelse(length(which(!is.na(row))) < min_vals, NA, cor.test.na(x=row, y=ref_levels, method="pearson", use="complete.obs"))
+                    status <- "OK"
+                }
+                
+                if (is.null(weights)) {
+                    c(corr_val, corr_pval, status)
+                }
+                else {
+                    c(corr_val, wcorr_val, corr_pval, status)
+                }
             })
-            corr_qs <- p.adjust(corr_ps)
-
-            status_message <- paste("Total features:", length(corr_vals), "values with successful t-test", length(which(!is.na(corr_ps))))
-            if (!is.null(weights)) {
-                status_message <- paste(status_message, "Weighted correlation calculated for:", length(which(!is.na(weighted_corr_vals))))
+                        
+            corr_val_df <- data.frame(t(corr_val_table))
+            if (is.null(weights)) {
+                colnames(corr_val_df) <- c("pearson_corr", "pearson_p", "status")
             }
-            message(status_message)
+            else {
+                colnames(corr_val_df) <- c("pearson_corr", "pearson_w_corr", "pearson_p", "status")
+            }
 
-            cbind(pearson_corr=corr_vals, weighted_pearson_corr=weighted_corr_vals, pearson_p=corr_ps, pearson_q=corr_qs)
+            corr_val_df$pearson_q <- p.adjust(corr_val_df$pearson_p, method = "BH")
+            
+            message("Calculation status:")
+            print(table(corr_val_df$status))
+
+            if (!retain_status) {
+                corr_val_df[, !(colnames(corr_val_df) %in% "status")]
+            }
+            else {
+                corr_val_df
+            }
         },
 
         reduce_technical_replicates_for_matrices = function(dataMat, designMat, techRepGroups) {
