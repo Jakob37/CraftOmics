@@ -68,36 +68,13 @@ MasterWidget <- R6Class(
                                         selectInput("data1", "Dataset 1:", selected=default_name, choices=dataset_names),
                                         selectInput("data2", "Dataset 2:", selected=default_name, choices=dataset_names),
                                         checkboxGroupInput("checkgroup", "Remove group", choices=names(outlier_sets), selected=NULL),
-                                        selectInput("cond1", "Condition:", choices = colnames(colData(dataset)), selected=default_cond),
-                                        selectInput("cond2", "Condition:", choices = colnames(colData(dataset)), selected=default_cond)
+                                        selectInput("cond1", "Condition 1:", choices = colnames(colData(dataset)), selected=default_cond),
+                                        selectInput("cond2", "Condition 2:", choices = colnames(colData(dataset)), selected=default_cond)
                                     ),
+                                    
                                     conditionalPanel(
                                         condition = "input.tabs == 'Venns' || input.tabs == 'Hists'",
                                         selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names)
-                                    ),
-                                    
-                                    conditionalPanel(
-                                        condition = "input.tabs == 'Barplot'",
-                                        checkboxInput("show_na", "Show NA counts", value=FALSE),
-                                        checkboxInput("show_mean", "Show mean", value=FALSE)
-                                    ),
-                                    
-                                    conditionalPanel(
-                                        condition = "input.tabs == 'QQ' || input.tabs == 'Density'",
-                                        numericInput("subset", "Partial data:", value=500, min=100, max=nrow(assay(dataset))),
-                                        checkboxInput("fulldata", "Use full data", value = FALSE)
-                                    ),
-                                    
-                                    # Principal component
-                                    conditionalPanel(
-                                        condition = "input.tabs == 'PCA'",
-                                        checkboxInput("as_label", "Show as text"),
-                                        selectInput("text_labels", "Text labels:", selected=default_cond, choices=colnames(colData(dataset))),
-                                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1),
-                                        selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
-                                        selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1),
-                                        selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
-                                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
                                     ),
                                     
                                     # Histograms
@@ -119,7 +96,51 @@ MasterWidget <- R6Class(
                                         checkboxInput("venn_inverse", "Check if greater than", value=FALSE),
                                         checkboxInput("threeway_venn", "Three-way Venn", value=FALSE)
                                     )
+                                    
                                  ),
+                                tabPanel(
+                                    "Customize",
+                                    # Principal component
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'PCA'",
+                                        checkboxInput("as_label", "Show as text"),
+                                        selectInput("text_labels", "Text labels:", selected=default_cond, choices=colnames(colData(dataset))),
+                                        numericInput("pc_comps", "Max PCs in Scree", value=6, min=1),
+                                        selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
+                                        selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
+                                        selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1),
+                                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
+                                    ),
+                                    
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Barplot'",
+                                        checkboxInput("show_na", "Show NA counts", value=FALSE),
+                                        checkboxInput("show_mean", "Show mean", value=FALSE)
+                                    ),
+                                    
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'QQ' || input.tabs == 'Density'",
+                                        numericInput("subset", "Partial data:", value=500, min=100, max=nrow(assay(dataset))),
+                                        checkboxInput("fulldata", "Use full data", value = FALSE)
+                                    )
+                                ),
+                                
+                                tabPanel(
+                                    "Display",
+                                    fluidRow(
+                                        textInput(inputId="plot_title", label="Title", value=""),
+                                        numericInput(inputId="plot_cols", label="Columns", value=2, step=1, min=1),
+                                        textInput(inputId="legend_color", label="Leg. lab. Color", value=""),
+                                        textInput(inputId="legend_fill", label="Leg. lab. Fill", value=""),
+                                        selectInput(inputId="legend_pos", label="Legend: Pos", selected="bottom", 
+                                                    choices = c("top", "bottom", "left", "right")),
+                                        checkboxInput(inputId="legend_common", label="Legend: Common", value=TRUE),
+                                        numericInput(inputId="title_size", label="Title size", value=14, step=1, min=4),
+                                        numericInput(inputId="subtitle_size", label="Subtitle size", value=14, step=1, min=4),
+                                        numericInput(inputId="axis_size", label="Label size", value=12, step=1, min=4),
+                                        numericInput(inputId="ticks_size", label="Tick label size", value=10, step=1, min=4)
+                                    )
+                                ),
                                 tabPanel(
                                     "Download",
                                     fluidRow(
@@ -176,31 +197,38 @@ MasterWidget <- R6Class(
                     })
 
                     output$Barplot = renderPlot({
-                        pf$do_bar(datasets, input)
+                        plts <- pf$do_bar(datasets, input)
+                        pf$annotate(plts, input)
                     })
                     
                     output$QQ = renderPlot({
-                        pf$do_qq(datasets, input)
+                        plt <- pf$do_qq(datasets, input)
+                        pf$annotate(plt, input)
                     })
                     
                     output$Density = renderPlot({
-                        pf$do_density(datasets, input)
+                        plt <- pf$do_density(datasets, input)
+                        pf$annotate(plt, input)
                     })
                     
                     output$PCA = renderPlot({
-                        pf$do_pca(datasets, input)
+                        plt <- pf$do_pca(datasets, input)
+                        pf$annotate(plt, input)
                     })
                     
                     output$Cluster = renderPlot({
-                        pf$do_cluster(datasets, input)
+                        plt <- pf$do_cluster(datasets, input)
+                        pf$annotate(plt, input)
                     })
                     
                     output$Hists = renderPlot({
-                        pf$do_hists(datasets, input, contrast_suffix)
+                        plt <- pf$do_hists(datasets, input, contrast_suffix)
+                        pf$annotate(plt, input)
                     })
                     
                     output$Venns = renderPlot({
-                        pf$do_venns(datasets, input, contrast_suffix)
+                        plt <- pf$do_venns(datasets, input, contrast_suffix)
+                        pf$annotate(plt, input)
                     })
                     
                     output$MA = renderPlot({

@@ -1,6 +1,64 @@
+library(R6)
+library(tidyverse)
+
+library(ggpubr)
+
 MasterWidgetPlotFuncs <- R6Class(
     
     public = list(
+        
+        annotate = function(plts, input) {
+            
+            if (input$plot_title != "") {
+                title <- input$plot_title
+            }
+            else {
+                title <- paste("Dataset:", input$data1)
+            }
+            
+            plot_rows <- ceiling(length(plts) / input$plot_cols)
+            
+            if (input$legend_color != "" || input$legend_fill != "") {
+                plts <- lapply(
+                    plts, 
+                    function(plt, color, fill) { plt + labs(color=color, fill=fill) },
+                    color=input$legend_color,
+                    fill=input$legend_fill
+                )
+            }
+            
+            plts <- lapply(
+                plts,
+                function(plt, title_size, axis_size, ticks_size) { 
+                    plt + theme(
+                        plot.title=element_text(size=title_size),
+                        axis.text=element_text(size=ticks_size),
+                        axis.title=element_text(size=axis_size)
+                    ) 
+                },
+                title_size=input$subtitle_size,
+                axis_size=input$axis_size,
+                ticks_size=input$ticks_size
+            )
+            
+            arr_obj <- ggpubr::ggarrange(
+                plotlist=plts, 
+                ncol=input$plot_cols, 
+                nrow=plot_rows, 
+                common.legend=input$legend_common,
+                legend = input$legend_pos
+            )
+            
+            if (input$legend_common) {
+                arr_obj <- arr_obj 
+            }
+            
+            annotate_figure(
+                arr_obj, 
+                top = text_grob(title, color = "black", face = "bold", size = input$title_size),
+                fig.lab.size = input$subtitle_size
+            )
+        },
         
         do_bar = function(datasets, input) {
             dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
@@ -15,7 +73,7 @@ MasterWidgetPlotFuncs <- R6Class(
                 )
             }
             
-            grid.arrange(plts[[1]], plts[[2]])
+            plts
         },
         
         do_density = function(datasets, input) {
@@ -33,7 +91,7 @@ MasterWidgetPlotFuncs <- R6Class(
                 )
             }
             
-            grid.arrange(plts[[1]], plts[[2]])
+            list(plts[[1]], plts[[2]])
         },
         
         do_qq = function(datasets, input) {
@@ -51,7 +109,7 @@ MasterWidgetPlotFuncs <- R6Class(
                 )
             }
             
-            grid.arrange(plts[[1]], plts[[2]])
+            list(plts[[1]], plts[[2]])
         },
         
         do_pca = function(datasets, input) {
@@ -71,7 +129,7 @@ MasterWidgetPlotFuncs <- R6Class(
             }
             scree <- mv$plot_component_fraction(dobs[[1]]$sdf, max_comps=input$pc_comps)
             
-            grid.arrange(plts[[1]], plts[[2]], scree, ncol=2)
+            list(plts[[1]], plts[[2]], scree)
             
         },
         
@@ -88,7 +146,8 @@ MasterWidgetPlotFuncs <- R6Class(
                     as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]])) + ggtitle(dobs[[i]]$title)
             }
             
-            grid.arrange(plts[[1]], plts[[2]], ncol=2)
+            plts
+            # grid.arrange(plts[[1]], plts[[2]], ncol=2)
         },
         
         do_hists = function(datasets, input, contrast_suffix) {
@@ -126,7 +185,8 @@ MasterWidgetPlotFuncs <- R6Class(
                 })
             }
             
-            grid.arrange(grobs=plts, ncol=1, top=dobs[[1]]$title)
+            plts
+            # grid.arrange(grobs=plts, ncol=1, top=dobs[[1]]$title)
         },
         
         do_venns = function(datasets, input, contrast_suffix) {
@@ -143,7 +203,8 @@ MasterWidgetPlotFuncs <- R6Class(
                     check_greater_than = input$venn_inverse
                     # log2_fold_thres = input$fold
                 )
-                grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$stat_data))
+                out
+                # grid.arrange(grobs=out, ncol=3, top=paste0("Dataset: ", input$stat_data))
             }
             else {
                 target_contrasts <- contrasts[1:3]
