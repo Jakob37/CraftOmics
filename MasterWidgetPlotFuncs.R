@@ -238,12 +238,47 @@ MasterWidgetPlotFuncs <- R6Class(
             }
         },
         
-        do_ma = function(datasets, input, contrast_suffix) {
-            ggplot() + ggtitle("MA currently not implemented") + theme_classic()
-        },
-        
-        do_vulc = function(datasets, input, contrast_suffix) {
-            ggplot() + ggtitle("Vulcano currently not implemented") + theme_classic()
+        do_general_scatter = function(datasets, input, contrast_suffix) {
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
+            contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
+            
+            plts <- list()
+            for (contrast in contrasts) {
+                
+                target_cols <- paste(contrast, c(input$scatter_x, input$scatter_y, input$scatter_color), sep=".")
+                
+                x_col <- target_cols[1]
+                y_col <- target_cols[2]
+                sig_col <- target_cols[3]
+                
+                tbl <- dobs[[1]]$adf[, target_cols]
+                tbl <- tbl[complete.cases(tbl), ]
+                
+                if (input$scatter_minuslog_y) {
+                    tbl[[y_col]] <- -log10(tbl[[y_col]])
+                }
+                
+                tbl$is_sig <- tbl[, sig_col] < input$scatter_color_cutoff
+                tbl <- tbl %>% arrange(UQ(as.name(sig_col)))
+                
+                plt <- ggplot(tbl, aes_string(x_col, y_col, color="is_sig")) +
+                    geom_point(size=1, alpha=0.5, na.rm=TRUE) +
+                    ggtitle(paste("Dataset:", input$stat_data)) +
+                    theme_classic()
+                
+                plts[[contrast]] <- plt
+            }
+            
+            if (input$scaleaxis) {
+                max_vals <- lapply(plts, function(plt) {
+                    layer_scales(plt)$y$range$range[2]
+                })
+                plts <- lapply(plts, function(plt) {
+                    plt <- plt + ylim(0, 1.01 * max(unlist(max_vals)))
+                })
+            }
+            
+            plts
         },
         
         do_spotcheck = function(datasets, input) {

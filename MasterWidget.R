@@ -44,8 +44,6 @@ MasterWidget <- R6Class(
                 "output_path", "output_width", "output_height", "output_dpi"
             )
             
-            explore_plots <- c("Barplot", "QQ", "Density", "PCA", "Cluster")
-            
             height_step_size <- 50
             
             shinyApp(
@@ -73,7 +71,7 @@ MasterWidget <- R6Class(
                                     ),
                                     
                                     conditionalPanel(
-                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists'",
+                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists' || input.tabs == 'Scatter'",
                                         selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names, size=20, selectize=FALSE)
                                     ),
                                     
@@ -95,8 +93,17 @@ MasterWidget <- R6Class(
                                         sliderInput("venn_thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
                                         checkboxInput("venn_inverse", "Check if greater than", value=FALSE),
                                         checkboxInput("threeway_venn", "Three-way Venn", value=FALSE)
-                                    )
+                                    ),
                                     
+                                    # General scatter
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Scatter'",
+                                        selectInput("scatter_x", "X-axis:", selected=contrast_suffixes[2], choices=contrast_suffixes),
+                                        selectInput("scatter_y", "Y-axis:", selected=contrast_suffixes[1], choices=contrast_suffixes),
+                                        selectInput("scatter_color", "Color cond:", selected="adj.P.Val", choices=contrast_suffixes),
+                                        numericInput("scatter_color_cutoff", "Color cutoff:", value=0.05, min=0, max=1),
+                                        checkboxInput("scatter_minuslog_y", "Minus-log y:", value=FALSE)
+                                    )
                                  ),
                                 tabPanel(
                                     "Customize",
@@ -169,9 +176,7 @@ MasterWidget <- R6Class(
                                 tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
-                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=400, step=height_step_size)),
-                                tabPanel("MA", numericInput(inputId="MA_height", "Plot height", value=500, step=height_step_size)),
-                                tabPanel("Vulc", numericInput(inputId="Vulc_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Scatter", numericInput(inputId="Scatter_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Spotcheck", numericInput(inputId="Spotcheck_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Table", numericInput(inputId="Table_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Profile", numericInput(inputId="Profile_height", "Plot height", value=500, step=height_step_size))
@@ -235,12 +240,9 @@ MasterWidget <- R6Class(
                         pf$annotate(plt, input)
                     })
                     
-                    output$MA = renderPlot({
-                        pf$do_ma(datasets, input, contrast_suffix)
-                    })
-                    
-                    output$Vulc = renderPlot({
-                        pf$do_vulc(datasets, input, contrast_suffix)
+                    output$Scatter = renderPlot({
+                        plts <- pf$do_general_scatter(datasets, input, contrast_suffix)
+                        pf$annotate(plts, input)
                     })
                     
                     output$Spotcheck = renderPlot({
@@ -248,9 +250,8 @@ MasterWidget <- R6Class(
                     })
                     
                     output$Table = renderTable({
-                        # pf$do_table(datasets, input)
-                        
-                        browser()
+
+                        stop("Table currently not implemented")
                         
                         table <- datasets[[input$data1]] %>% rowData() %>% data.frame()
                         DT::renderDataTable({
@@ -261,8 +262,6 @@ MasterWidget <- R6Class(
                         
                         # - Interactive data filtering in background
                         # - Display of the table
-                        
-                        
                     })
                     
                     output$Profile = renderPlot({
@@ -337,89 +336,7 @@ MasterWidget <- R6Class(
             )
         },
         
-        scatter_widgets = function(stat_data, contrast_suffix, p_col="P.Value", q_col="adj.P.Val", 
-                                   fold_col="logFC", expr_col="AveExpr", height=1100) {
-            
-            dataset_names <- names(stat_data)
-            default_name <- dataset_names[1]
 
-            shinyApp(
-                ui = fluidPage(
-                    selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-                    selectInput("type", "Type:", selected="adj.P.Val", choices = c("adj.P.Val", "P.Value")),
-                    checkboxInput("scaleaxis", "Scale Y axes"),
-                    sliderInput("thres", "Threshold:", value=0.1, min=0, max=1, step=0.01),
-                    plotOutput("vulcs"),
-                    plotOutput("mas")
-                ),
-                server = function(input, output) {
-                    
-                    output$vulcs = renderPlot({
-                        
-                        rdf <- data.frame(rowData(stat_data[[input$data]]))
-                        plts <- list()
-                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
-                        
-                        for (contrast in contrasts) {
-                            
-                            tbl <- data.frame(
-                                P.Value=rdf[[paste(contrast, p_col, sep=".")]],
-                                adj.P.Val=rdf[[paste(contrast, q_col, sep=".")]],
-                                logFC=rdf[[paste(contrast, fold_col, sep=".")]],
-                                AveExpr=rdf[[paste(contrast, expr_col, sep=".")]]
-                            )
-                            plt <- stv$vulc(tbl, sig_thres = input$thres, sig_col_name = input$type, na.rm=TRUE) +
-                                theme_classic() +
-                                ggtitle(contrast)
-                            plts[[contrast]] <- plt
-                        }
-                        
-                        if (input$scaleaxis) {
-                            max_vals <- lapply(plts, function(plt) {
-                                layer_scales(plt)$y$range$range[2]
-                            })
-                            plts <- lapply(plts, function(plt) {
-                                plt <- plt + ylim(0, 1.01 * max(unlist(max_vals)))
-                            })
-                        }
-                        
-                        grid.arrange(grobs=plts, ncol=3, top=paste0("Dataset: ", input$data))
-                    }, height=300)
-                    
-                    output$mas = renderPlot({
-                        
-                        rdf <- data.frame(rowData(stat_data[[input$data]]))
-                        plts <- list()
-                        contrasts <- private$get_contrasts_from_suffix(stat_data[[input$data]], contrast_suffix)
-                        
-                        for (contrast in contrasts) {
-                            
-                            tbl <- data.frame(
-                                P.Value=rdf[[paste(contrast, p_col, sep=".")]],
-                                adj.P.Val=rdf[[paste(contrast, q_col, sep=".")]],
-                                logFC=rdf[[paste(contrast, fold_col, sep=".")]],
-                                AveExpr=rdf[[paste(contrast, expr_col, sep=".")]]
-                            )
-                            plt <- stv$ma(tbl, sig_thres = input$thres, sig_col_name = input$type, na.rm=TRUE) +
-                                theme_classic() + 
-                                ggtitle(contrast)
-                            plts[[contrast]] <- plt
-                        }
-                        
-                        if (input$scaleaxis) {
-                            max_vals <- lapply(plts, function(plt) { layer_scales(plt)$y$range$range[2] })
-                            min_vals <- lapply(plts, function(plt) { layer_scales(plt)$y$range$range[1] })
-                            plts <- lapply(plts, function(plt) { 
-                                plt <- plt + ylim(1.01 * min(unlist(min_vals)), 1.01 * max(unlist(max_vals))) 
-                            })
-                        }
-                        
-                        grid.arrange(grobs=plts, ncol=3, top=paste0("Dataset: ", input$data))
-                    }, height=300)
-                },
-                options=list(height=height)
-            )
-        },
 
         # table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
         #     
