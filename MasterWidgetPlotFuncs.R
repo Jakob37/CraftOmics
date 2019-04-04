@@ -13,7 +13,7 @@ MasterWidgetPlotFuncs <- R6Class(
                 title <- input$plot_title
             }
             else {
-                title <- paste("Dataset:", input$data1)
+                title <- "A title can be assigned under 'Display'"
             }
             
             plot_rows <- ceiling(length(plts) / input$plot_cols)
@@ -27,19 +27,21 @@ MasterWidgetPlotFuncs <- R6Class(
                 )
             }
             
-            plts <- lapply(
-                plts,
-                function(plt, title_size, axis_size, ticks_size) { 
-                    plt + theme(
-                        plot.title=element_text(size=title_size),
-                        axis.text=element_text(size=ticks_size),
-                        axis.title=element_text(size=axis_size)
-                    ) 
-                },
-                title_size=input$subtitle_size,
-                axis_size=input$axis_size,
-                ticks_size=input$ticks_size
-            )
+            if (input$tabs != "Venns") {
+                plts <- lapply(
+                    plts,
+                    function(plt, title_size, axis_size, ticks_size) { 
+                        plt + theme(
+                            plot.title=element_text(size=title_size),
+                            axis.text=element_text(size=ticks_size),
+                            axis.title=element_text(size=axis_size)
+                        ) 
+                    },
+                    title_size=input$subtitle_size,
+                    axis_size=input$axis_size,
+                    ticks_size=input$ticks_size
+                )
+            }
             
             arr_obj <- ggpubr::ggarrange(
                 plotlist=plts, 
@@ -53,9 +55,13 @@ MasterWidgetPlotFuncs <- R6Class(
                 arr_obj <- arr_obj 
             }
             
+            subtext <- strwrap(input$plot_subtext, input$subtext_wrap, simplify=FALSE)
+            subtext_parsed <- sapply(subtext, paste, collapse="\n")
+            
             annotate_figure(
                 arr_obj, 
                 top = text_grob(title, color = "black", face = "bold", size = input$title_size),
+                bottom = text_grob(subtext_parsed, color = "darkgray", size = input$title_size),
                 fig.lab.size = input$subtitle_size
             )
         },
@@ -127,10 +133,15 @@ MasterWidgetPlotFuncs <- R6Class(
                     label=label
                 ) + ggtitle(dobs[[i]]$title)
             }
-            scree <- mv$plot_component_fraction(dobs[[1]]$sdf, max_comps=input$pc_comps)
             
-            list(plts[[1]], plts[[2]], scree)
+            # browser()
             
+            if (!input$pca_hide_loadings) {
+                scree_plt <- mv$plot_component_fraction(dobs[[1]]$sdf, max_comps=input$pc_comps)
+                plts[[length(plts)+1]] <- scree_plt
+            }
+            
+            plts
         },
         
         do_cluster = function(datasets, input) {
@@ -193,6 +204,10 @@ MasterWidgetPlotFuncs <- R6Class(
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
+            if (length(contrasts) < 2) {
+                stop("Must have at least two contrast-levels to show Venn")
+            }
+            
             if (!input$threeway_venn) {
                 out <- stv$plot_comp_venns(
                     dobs[[1]]$adf, 
@@ -211,7 +226,7 @@ MasterWidgetPlotFuncs <- R6Class(
                 if (length(target_contrasts) != length(contrasts)) {
                     warning("Performing threeway-venn only for first three contrasts")
                 }
-                stv$threeway_venn(
+                plt <- stv$threeway_venn(
                     dobs[[1]]$adf,
                     contrasts,
                     thres_col_base=input$venn_type,
@@ -219,9 +234,8 @@ MasterWidgetPlotFuncs <- R6Class(
                     fold_col_base=input$venn_fold,
                     check_greater_than=input$venn_inverse
                 )
-                
+                list(plt)
             }
-            
         },
         
         do_ma = function(datasets, input, contrast_suffix) {

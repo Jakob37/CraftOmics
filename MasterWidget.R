@@ -53,7 +53,7 @@ MasterWidget <- R6Class(
                     
                     tags$head(tags$style(HTML(".shiny-split-layout > div { overflow: visible; }"))),
                     
-                    titlePanel("Explomics"),
+                    titlePanel("Ponderomics"),
                     sidebarLayout(
                         sidebarPanel(
                             
@@ -74,14 +74,14 @@ MasterWidget <- R6Class(
                                     
                                     conditionalPanel(
                                         condition = "input.tabs == 'Venns' || input.tabs == 'Hists'",
-                                        selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names)
+                                        selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names, size=20, selectize=FALSE)
                                     ),
                                     
                                     # Histograms
                                     conditionalPanel(
                                         condition = "input.tabs == 'Hists'",
                                         selectInput("hist_target", "Target col:", selected=contrast_suffix, choices = contrast_suffixes),
-                                        numericInput("hist_bins", "Bin count", value=50, min=1, max=100),
+                                        numericInput("hist_bins", "Bin count", value=100, min=1),
                                         selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
                                         checkboxInput("scaleaxis", "Scale Y axes"),
                                         checkboxInput("limitxaxis", "Limit X axes")
@@ -109,7 +109,8 @@ MasterWidget <- R6Class(
                                         selectInput("pc1_plt1", "PC1 (plot1):", choices=1:8, selected=1),
                                         selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
                                         selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1),
-                                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2)
+                                        selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2),
+                                        checkboxInput("pca_hide_loadings", "Hide loadings", value=FALSE)
                                     ),
                                     
                                     conditionalPanel(
@@ -129,6 +130,7 @@ MasterWidget <- R6Class(
                                     "Display",
                                     fluidRow(
                                         textInput(inputId="plot_title", label="Title", value=""),
+                                        textInput(inputId="plot_subtext", label="Subtext", value=""),
                                         numericInput(inputId="plot_cols", label="Columns", value=2, step=1, min=1),
                                         textInput(inputId="legend_color", label="Leg. lab. Color", value=""),
                                         textInput(inputId="legend_fill", label="Leg. lab. Fill", value=""),
@@ -138,7 +140,9 @@ MasterWidget <- R6Class(
                                         numericInput(inputId="title_size", label="Title size", value=14, step=1, min=4),
                                         numericInput(inputId="subtitle_size", label="Subtitle size", value=14, step=1, min=4),
                                         numericInput(inputId="axis_size", label="Label size", value=12, step=1, min=4),
-                                        numericInput(inputId="ticks_size", label="Tick label size", value=10, step=1, min=4)
+                                        numericInput(inputId="ticks_size", label="Tick label size", value=10, step=1, min=4),
+                                        numericInput(inputId="subtext_size", label="Subtext size", value=10, step=1, min=4),
+                                        numericInput(inputId="subtext_wrap", label="Subtext wrap length", value=50, step=5)
                                     )
                                 ),
                                 tabPanel(

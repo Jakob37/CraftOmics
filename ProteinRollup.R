@@ -62,9 +62,8 @@ ProteinRollup <- R6Class(
         
         protein_rollup_on_matrix = function(design_fp, data_fp, protein_col, peptide_col, sample_col, out_fp, rollup_func="rrollup") {
             
-            ddf <- read_tsv(design_fp)
-            raw_rdf <- read_tsv(data_fp)
-            # adf <- rdf %>% select(-one_of(ddf[[sample_col]]))
+            ddf <- read_tsv(design_fp, col_types=cols())
+            raw_rdf <- read_tsv(data_fp, col_types=cols())
             rdf <- raw_rdf %>% filter(!is.na(UQ(as.name(protein_col))))
             
             trimmed_count <- nrow(raw_rdf) - nrow(rdf)
