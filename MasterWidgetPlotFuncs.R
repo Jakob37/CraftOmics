@@ -201,6 +201,7 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_venns = function(datasets, input, contrast_suffix) {
+            
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             

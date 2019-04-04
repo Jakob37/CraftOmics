@@ -44,6 +44,8 @@ MasterWidget <- R6Class(
                 "output_path", "output_width", "output_height", "output_dpi"
             )
             
+            explore_plots <- c("Barplot", "QQ", "Density", "PCA", "Cluster")
+            
             height_step_size <- 50
             
             shinyApp(
@@ -176,6 +178,7 @@ MasterWidget <- R6Class(
                                 tabPanel("PCA", numericInput(inputId="PCA_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Cluster", numericInput(inputId="Cluster_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Hists", numericInput(inputId="Hists_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("Venns", numericInput(inputId="Venns_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Scatter", numericInput(inputId="Scatter_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Spotcheck", numericInput(inputId="Spotcheck_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Table", numericInput(inputId="Table_height", "Plot height", value=500, step=height_step_size)),
@@ -250,7 +253,8 @@ MasterWidget <- R6Class(
                     })
                     
                     output$Table = renderTable({
-
+                        # pf$do_table(datasets, input)
+                        
                         stop("Table currently not implemented")
                         
                         table <- datasets[[input$data1]] %>% rowData() %>% data.frame()
@@ -262,6 +266,8 @@ MasterWidget <- R6Class(
                         
                         # - Interactive data filtering in background
                         # - Display of the table
+                        
+                        
                     })
                     
                     output$Profile = renderPlot({
