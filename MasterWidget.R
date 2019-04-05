@@ -18,8 +18,8 @@ MasterWidget <- R6Class(
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
             dataset <- datasets[[1]]
+            annot_col_names <- colnames(rowData(dataset))
             if (!is.null(contrast_suffix)) {
-                annot_col_names <- colnames(rowData(dataset))
                 contrasts <- private$get_contrasts_from_suffix(annot_col_names, contrast_suffix)
                 contrast_suffixes <- private$get_suffixes_from_contrast(annot_col_names, contrasts[1])
             }
@@ -73,7 +73,7 @@ MasterWidget <- R6Class(
                                     ),
                                     
                                     conditionalPanel(
-                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists' || input.tabs == 'Scatter'",
+                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists' || input.tabs == 'Scatter' || input.tabs == 'Table'",
                                         selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names, size=20, selectize=FALSE)
                                     ),
                                     
@@ -104,6 +104,22 @@ MasterWidget <- R6Class(
                                         selectInput("scatter_color", "Color cond:", selected="adj.P.Val", choices=contrast_suffixes),
                                         numericInput("scatter_color_cutoff", "Color cutoff:", value=0.05, min=0, max=1),
                                         checkboxInput("scatter_minuslog_y", "Minus-log y:", value=FALSE)
+                                    ),
+                                    
+                                    # Table
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Table'",
+                                        #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
+                                        #             selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
+                                        #             selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_filter),
+                                        #             splitLayout(
+                                        #                 sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
+                                        #                 sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
+                                        #             ),
+                                        #             checkboxInput("exclusive", "Only show significant in all groups"),
+                                        #             downloadButton('download', "Download Table"),
+                                        #             DT::dataTableOutput("table")
+                                        selectInput("fields", "Shown fields", choices=annot_col_names, multiple=TRUE, selected=annot_col_names[1:5])
                                     )
                                  ),
                                 tabPanel(
@@ -150,7 +166,8 @@ MasterWidget <- R6Class(
                                         numericInput(inputId="axis_size", label="Label size", value=12, step=1, min=4),
                                         numericInput(inputId="ticks_size", label="Tick label size", value=10, step=1, min=4),
                                         numericInput(inputId="subtext_size", label="Subtext size", value=10, step=1, min=4),
-                                        numericInput(inputId="subtext_wrap", label="Subtext wrap length", value=50, step=5)
+                                        numericInput(inputId="subtext_wrap", label="Subtext wrap length", value=50, step=5),
+                                        numericInput(inputId="sidebar_width", label="Sidebar width", value=4)
                                     )
                                 ),
                                 tabPanel(
@@ -164,7 +181,7 @@ MasterWidget <- R6Class(
                                         downloadButton(outputId="download_params", label="Download parameters")
                                     )
                                 )
-                            )
+                            ), width=4
                         ),
                         mainPanel(
                             # Technical
@@ -183,7 +200,7 @@ MasterWidget <- R6Class(
                                 tabPanel("Table", numericInput(inputId="Table_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Profile", numericInput(inputId="Profile_height", "Plot height", value=500, step=height_step_size))
                             ),
-                            uiOutput("BarplotUI")
+                            uiOutput("PlotUI")
                         )
                     )
                 ),
@@ -198,13 +215,14 @@ MasterWidget <- R6Class(
                         input[[target_name]]
                     })
                     
-                    output$BarplotUI <- renderUI({
-                        if (input$tabs != "Table") {
-                            plotOutput(input$tabs, height=plotHeight())
+                    output$PlotUI <- renderUI({
+                        if (input$tabs == "Table") {
+                            dataTableOutput("Table")
                         }
                         else {
-                            DT::DTOutput("Table")
+                            plotOutput(input$tabs, height=plotHeight())
                         }
+                        
                     })
 
                     output$Barplot = renderPlot({
@@ -251,23 +269,10 @@ MasterWidget <- R6Class(
                         pf$do_spotcheck(datasets, input)
                     })
                     
-                    output$Table = renderTable({
-                        # pf$do_table(datasets, input)
-                        
-                        stop("Table currently not implemented")
-                        
-                        table <- datasets[[input$data1]] %>% rowData() %>% data.frame()
-                        DT::renderDataTable({
-                            table
-                        })
-                        
-                        # Think here to properly incorporate the combination of:
-                        
-                        # - Interactive data filtering in background
-                        # - Display of the table
-                        
-                        
-                    })
+                    output$Table = renderDT({
+                        # iris
+                        pf$do_table(datasets, input, outlier_sets)
+                    }, options = list(lengthChange = TRUE))
                     
                     output$Profile = renderPlot({
                         pf$do_profile(datasets, input)
@@ -335,6 +340,9 @@ MasterWidget <- R6Class(
                         private$update_input_choices(session, datasets, "cond2", input$data2, input$cond2)
                         private$update_input_choices(session, datasets, "text_labels", input$data1, input$text_labels)
                         private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
+                        
+                        # For dynamic UI, maybe check:
+                        # https://shiny.rstudio.com/articles/dynamic-ui.html
                     })
                 },
                 options=list(height=height)

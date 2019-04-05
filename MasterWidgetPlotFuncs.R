@@ -347,11 +347,11 @@ MasterWidgetPlotFuncs <- R6Class(
         #     })
         # },
         
-        do_table = function(datasets, input) {
-            table <- datasets[[input$data1]] %>% rowData() %>% data.frame()
-            DT::renderDataTable({
-                table
-            })
+        do_table = function(datasets, input, outlier_sets) {
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
+            # contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
+
+            dobs[[1]]$adf %>% dplyr::select(input$fields)
         },
         
         do_profile = function(datasets, input) {
