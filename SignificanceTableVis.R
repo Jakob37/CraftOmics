@@ -52,8 +52,6 @@ SignificanceTableVis <- R6Class(
         threeway_venn = function(sig_table, contrasts, thres_col_base, thres, fold_col_base="logFC",
                                  check_greater_than=FALSE) {
 
-            # browser()
-            
             thres_cols <- paste(contrasts, thres_col_base, sep=".")
             fold_cols <- paste(contrasts, fold_col_base, sep=".")
             
@@ -65,28 +63,76 @@ SignificanceTableVis <- R6Class(
                     col > thres
                 }
             }, thres=thres, inverse=check_greater_than)
-            
+
+            # 1 if same sign, -1 if contra sign            
             fold_signs <- apply(sig_table[, fold_cols], 2, function(col) {
-                col > 0
+                2 * as.numeric(col > 0) - 1
             })
             
-            sig_vals_indices <- list()
-            same_folds_list <- list()
-            comps <- list(c(1,2), c(2,3), c(1,3), c(1,2,3))
+            colnames(sig_vals) <- paste(c("A", "B", "C"), "sig", sep="_")
+            colnames(fold_signs) <- paste(c("A", "B", "C"), "same", sep="_")
             
-            for (comp in comps) {
-                belonging_row_nbrs <- which(apply(sig_vals[, comp], 1, all))
-                sig_vals_indices[[paste(comp, collapse="")]] <- belonging_row_nbrs
-                belonging_fold_signs <- fold_signs[belonging_row_nbrs, comp, drop=FALSE]
-                if (!is.null(belonging_fold_signs)) {
-                    same_folds_list[[paste(comp, collapse="")]] <- which(apply(belonging_fold_signs, 1, function(row) {
-                        length(unique(row)) == 1
-                    }))
-                }
-                else {
-                    same_folds_list[[paste(comp, collapse="")]] <- 0
-                }
-            }
+            venn_stat_df <- data.frame(cbind(sig_vals, fold_signs))
+            
+            
+            venn_stat_df$AB_sig <- venn_stat_df$A_sig & venn_stat_df$B_sig
+            venn_stat_df$AC_sig <- venn_stat_df$A_sig & venn_stat_df$C_sig
+            venn_stat_df$BC_sig <- venn_stat_df$B_sig & venn_stat_df$C_sig
+            venn_stat_df$ABC_sig <- venn_stat_df$A_sig & venn_stat_df$B_sig & venn_stat_df$C_sig
+            
+            venn_stat_df$AB_same <- venn_stat_df$A_same == venn_stat_df$B_same
+            venn_stat_df$AC_same <- venn_stat_df$A_same == venn_stat_df$C_same
+            venn_stat_df$BC_same <- venn_stat_df$B_same == venn_stat_df$C_same
+            venn_stat_df$ABC_same <- venn_stat_df$A_same == venn_stat_df$B_same & venn_stat_df$B_same == venn_stat_df$C_same
+            
+            # comps <- list(c(1,2), c(2,3), c(1,3), c(1,2,3))
+            # 
+            # calculate_comp_df <- function(comps, fold_signs) {
+            #     # Which indices that are passing the given threshold
+            #     sig_vals_indices <- list()
+            #     
+            #     # Information about whether these passing indices are in same direction across groups
+            #     same_folds_list <- list()
+            #     
+            #     for (comp in comps) {
+            #         belonging_row_contrast <- apply(sig_vals[, comp], 1, all)
+            #         # fold_signs <- fold_signs[belonging_row_contrast, comp, drop=FALSE]
+            #         
+            #         if (!is.null(belonging_fold_signs)) {
+            #             same_folds_list[[paste(comp, collapse="")]] <- which(apply(belonging_fold_signs, 1, function(row) {
+            #                 length(unique(row)) == 1
+            #             }))
+            #         }
+            #         else {
+            #             same_folds_list[[paste(comp, collapse="")]] <- 0
+            #         }
+            #     }
+            # }
+
+            
+            
+            # # Which indices that are passing the given threshold
+            # sig_vals_indices <- list()
+            # 
+            # # Information about whether these passing indices are in same direction across groups
+            # same_folds_list <- list()
+            # 
+            # for (comp in comps) {
+            #     belonging_row_nbrs <- which(apply(sig_vals[, comp], 1, all))
+            #     sig_vals_indices[[paste(comp, collapse="")]] <- belonging_row_nbrs
+            #     belonging_fold_signs <- fold_signs[belonging_row_nbrs, comp, drop=FALSE]
+            #     if (!is.null(belonging_fold_signs)) {
+            #         same_folds_list[[paste(comp, collapse="")]] <- which(apply(belonging_fold_signs, 1, function(row) {
+            #             length(unique(row)) == 1
+            #         }))
+            #     }
+            #     else {
+            #         same_folds_list[[paste(comp, collapse="")]] <- 0
+            #     }
+            # }
+            
+                        
+            
             
             circle_spacing <- 0.6
             df.circles <- data.frame(
@@ -95,32 +141,65 @@ SignificanceTableVis <- R6Class(
                 labels = contrasts
             )
             
-            c123 <- length(sig_vals_indices[["123"]])
-            c12 <- length(sig_vals_indices[["12"]]) - c123
-            c23 <- length(sig_vals_indices[["23"]]) - c123
-            c13 <- length(sig_vals_indices[["13"]]) - c123
+            # These counts are specific for each group, i.e. not 'C12 excluding C123'
+            # c123_specific <- length(sig_vals_indices[["123"]])
+            # c12_specific <- length(sig_vals_indices[["12"]]) - c123_specific
+            # c23_specific <- length(sig_vals_indices[["23"]]) - c123_specific
+            # c13_specific <- length(sig_vals_indices[["13"]]) - c123_specific
+            # cABC_specific <- 
+            # cAB_specific <- 
+            # cAC_specific <- 
+            # cBC_specific <- 
             
             tot_counts <- c(
-                length(which(sig_vals[, 1])) - c12 - c13 - c123,
-                length(which(sig_vals[, 2])) - c12 - c23 - c123,
-                length(which(sig_vals[, 3])) - c13 - c23 - c123,
-                c12,
-                c23,
-                c13,
-                c123
+                venn_stat_df %>% filter(A_sig & !ABC_sig & !AB_sig & !AC_sig) %>% nrow(),
+                venn_stat_df %>% filter(B_sig & !ABC_sig & !AB_sig & !BC_sig) %>% nrow(),
+                venn_stat_df %>% filter(C_sig & !ABC_sig & !AC_sig & !BC_sig) %>% nrow(),
+                venn_stat_df %>% filter(AB_sig & !ABC_sig) %>% nrow(),
+                venn_stat_df %>% filter(BC_sig & !ABC_sig) %>% nrow(),
+                venn_stat_df %>% filter(AC_sig & !ABC_sig) %>% nrow(),
+                venn_stat_df %>% filter(ABC_sig) %>% nrow()
+            )
+
+            contra_counts <- c(
+                0,
+                0,
+                0,
+                venn_stat_df %>% filter(AB_sig & !ABC_sig) %>% filter(!AB_same) %>% nrow(),
+                venn_stat_df %>% filter(BC_sig & !ABC_sig) %>% filter(!BC_same) %>% nrow(),
+                venn_stat_df %>% filter(AC_sig & !ABC_sig) %>% filter(!AC_same) %>% nrow(),
+                venn_stat_df %>% filter(ABC_sig) %>% filter(!ABC_same) %>% nrow()
             )
             
-            same_counts <- c(
-                0,
-                0,
-                0,
-                length(same_folds_list[["12"]]) - length(same_folds_list[["123"]]),
-                length(same_folds_list[["23"]]) - length(same_folds_list[["123"]]),
-                length(same_folds_list[["13"]]) - length(same_folds_list[["123"]]),
-                length(same_folds_list[["123"]])
-            )
+            same_counts <- tot_counts - contra_counts
+                        
+            # tot_counts <- c(
+            #     length(which(sig_vals[, 1])) - c12_specific - c13_specific - c123_specific,
+            #     length(which(sig_vals[, 2])) - c12_specific - c23_specific - c123_specific,
+            #     length(which(sig_vals[, 3])) - c13_specific - c23_specific - c123_specific,
+            #     c12_specific,
+            #     c23_specific,
+            #     c13_specific,
+            #     c123_specific
+            # )
             
-            contra_counts <- tot_counts - same_counts
+            # get_same_folds <- function(same_folds_list, target, combined) {
+            #     length(same_folds_list[[target]]) - length(which(same_folds_list[[target]] %in% same_folds_list[[combined]]))
+            # }
+            # 
+            # same_counts <- c(
+            #     0,
+            #     0,
+            #     0,
+            #     get_same_folds(same_folds_list, "12", "123"),
+            #     get_same_folds(same_folds_list, "23", "123"),
+            #     get_same_folds(same_folds_list, "13", "123"),
+            #     length(same_folds_list[["123"]])
+            # )
+            # 
+            # contra_counts <- tot_counts - same_counts
+            
+            # browser()
             
             df.data <- data.frame(
                 x=c(-1.5, 1.5, 0, 0, 1, -1, 0),

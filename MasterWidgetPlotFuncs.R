@@ -66,8 +66,8 @@ MasterWidgetPlotFuncs <- R6Class(
             )
         },
         
-        do_bar = function(datasets, input) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+        do_bar = function(datasets, input, outlier_sets) {
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
             plts <- list()
             for (i in seq_len(2)) {
                 plts[[i]] <- ev$abundance_bars(
@@ -82,8 +82,8 @@ MasterWidgetPlotFuncs <- R6Class(
             plts
         },
         
-        do_density = function(datasets, input) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+        do_density = function(datasets, input, outlier_sets) {
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
             if (input$fulldata) usecount <- NULL
             else usecount <- input$subset
             
@@ -100,8 +100,8 @@ MasterWidgetPlotFuncs <- R6Class(
             list(plts[[1]], plts[[2]])
         },
         
-        do_qq = function(datasets, input) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+        do_qq = function(datasets, input, outlier_sets) {
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
             if (input$fulldata) usecount <- NULL
             else usecount <- input$subset
             
@@ -118,9 +118,9 @@ MasterWidgetPlotFuncs <- R6Class(
             list(plts[[1]], plts[[2]])
         },
         
-        do_pca = function(datasets, input) {
+        do_pca = function(datasets, input, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
             if (!input$as_label) label <- NULL
             else label <- dobs[[1]]$ddf[, input$text_labels]
             
@@ -134,8 +134,6 @@ MasterWidgetPlotFuncs <- R6Class(
                 ) + ggtitle(dobs[[i]]$title)
             }
             
-            # browser()
-            
             if (!input$pca_hide_loadings) {
                 scree_plt <- mv$plot_component_fraction(dobs[[1]]$sdf, max_comps=input$pc_comps)
                 plts[[length(plts)+1]] <- scree_plt
@@ -144,9 +142,9 @@ MasterWidgetPlotFuncs <- R6Class(
             plts
         },
         
-        do_cluster = function(datasets, input) {
+        do_cluster = function(datasets, input, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup)
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
             if (!input$as_label) label <- NULL
             else label <- dobs[[1]]$ddf[, input$text_labels]
             
@@ -158,12 +156,11 @@ MasterWidgetPlotFuncs <- R6Class(
             }
             
             plts
-            # grid.arrange(plts[[1]], plts[[2]], ncol=2)
         },
         
-        do_hists = function(datasets, input, contrast_suffix) {
+        do_hists = function(datasets, input, contrast_suffix, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             plts <- list()
@@ -174,35 +171,41 @@ MasterWidgetPlotFuncs <- R6Class(
                 plt <- ev$pvalhist(dobs[[1]]$adf[[target_col]], na.rm=TRUE, bincount=input$hist_bins) +
                     theme_classic() +
                     scale_fill_brewer(palette="Dark2") +
-                    ggtitle(contrast) 
-                
-                if (input$limitxaxis) {
-                    xmin <- min(as.numeric(dobs[[1]]$adf[[target_col]]), na.rm = TRUE) - 0.01
-                    xmax <- max(as.numeric(dobs[[1]]$adf[[target_col]]), na.rm = TRUE) + 0.01
-                    plt <- plt + xlim(xmin, xmax)
-                }
+                    ggtitle(contrast) +
+                    xlab(input$hist_target) +
+                    ylab("Count")
                 
                 plts[[contrast]] <- plt
             }
             
-            if (input$scaleaxis) {
+            if (input$scale_x_axis) {
+                max_x_vals <- lapply(plts, function(plt) {
+                    layer_scales(plt)$x$range$range[2]
+                })
+
+                plts <- lapply(plts, function(plt) {
+                    plt <- plt +
+                        xlim(0, 1.01 * max(unlist(max_x_vals)))
+                })
+            }
+            
+            if (input$scale_y_axis) {
                 max_y_vals <- lapply(plts, function(plt) {
                     layer_scales(plt)$y$range$range[2]
                 })
                 
                 plts <- lapply(plts, function(plt) {
-                    plt <- plt + 
+                    plt <- plt +
                         ylim(0, 1.01 * max(unlist(max_y_vals)))
                 })
             }
             
             plts
-            # grid.arrange(grobs=plts, ncol=1, top=dobs[[1]]$title)
         },
         
-        do_venns = function(datasets, input, contrast_suffix) {
+        do_venns = function(datasets, input, contrast_suffix, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             if (length(contrasts) < 2) {
@@ -239,8 +242,8 @@ MasterWidgetPlotFuncs <- R6Class(
             }
         },
         
-        do_general_scatter = function(datasets, input, contrast_suffix) {
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup)
+        do_general_scatter = function(datasets, input, contrast_suffix, outlier_sets) {
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             plts <- list()
@@ -355,7 +358,7 @@ MasterWidgetPlotFuncs <- R6Class(
             ggplot() + ggtitle("Profile currently not implemented") + theme_classic()
         },
         
-        get_preproc_list = function(datasets, dataset_names, checkgroup) {
+        get_preproc_list = function(datasets, dataset_names, checkgroup, outlier_sets) {
             
             outliers <- unname(unlist(outlier_sets[checkgroup]))
             

@@ -82,9 +82,8 @@ MasterWidget <- R6Class(
                                         condition = "input.tabs == 'Hists'",
                                         selectInput("hist_target", "Target col:", selected=contrast_suffix, choices = contrast_suffixes),
                                         numericInput("hist_bins", "Bin count", value=100, min=1),
-                                        selectInput("target_col", "Target columns", selected=show_cols[1], choices=show_cols),
-                                        checkboxInput("scaleaxis", "Scale Y axes"),
-                                        checkboxInput("limitxaxis", "Limit X axes")
+                                        checkboxInput("scale_x_axis", "Share X axis"),
+                                        checkboxInput("scale_y_axis", "Share Y axis")
                                     ),
                                     
                                     # Venns
@@ -209,42 +208,42 @@ MasterWidget <- R6Class(
                     })
 
                     output$Barplot = renderPlot({
-                        plts <- pf$do_bar(datasets, input)
+                        plts <- pf$do_bar(datasets, input, outlier_sets)
                         pf$annotate(plts, input)
                     })
                     
                     output$QQ = renderPlot({
-                        plt <- pf$do_qq(datasets, input)
+                        plt <- pf$do_qq(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$Density = renderPlot({
-                        plt <- pf$do_density(datasets, input)
+                        plt <- pf$do_density(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$PCA = renderPlot({
-                        plt <- pf$do_pca(datasets, input)
+                        plt <- pf$do_pca(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$Cluster = renderPlot({
-                        plt <- pf$do_cluster(datasets, input)
+                        plt <- pf$do_cluster(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$Hists = renderPlot({
-                        plt <- pf$do_hists(datasets, input, contrast_suffix)
+                        plt <- pf$do_hists(datasets, input, contrast_suffix, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$Venns = renderPlot({
-                        plt <- pf$do_venns(datasets, input, contrast_suffix)
+                        plt <- pf$do_venns(datasets, input, contrast_suffix, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$Scatter = renderPlot({
-                        plts <- pf$do_general_scatter(datasets, input, contrast_suffix)
+                        plts <- pf$do_general_scatter(datasets, input, contrast_suffix, outlier_sets)
                         pf$annotate(plts, input)
                     })
                     

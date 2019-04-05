@@ -92,16 +92,14 @@ EvalVis <- R6Class(
                     data.frame(pvals=pvals), 
                     aes(pvals)) + 
                     geom_histogram(binwidth=binwidth, na.rm=na.rm, fill="#268BD2") + 
-                    ggtitle(title) +
-                    xlim(-0.1, 1.1)
+                    ggtitle(title)
             }
             else {
                 plt <- ggplot(
                     data.frame(pvals=pvals), 
                     aes(pvals)) + 
                     geom_histogram(bins=bincount, na.rm=na.rm, fill="#268BD2") + 
-                    ggtitle(title) +
-                    xlim(-0.1, 1.1)
+                    ggtitle(title)
             }
 
             if (!is.null(vline)) {
