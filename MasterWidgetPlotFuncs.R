@@ -179,26 +179,34 @@ MasterWidgetPlotFuncs <- R6Class(
             }
             
             if (input$scale_x_axis) {
-                max_x_vals <- lapply(plts, function(plt) {
-                    layer_scales(plt)$x$range$range[2]
-                })
-
-                plts <- lapply(plts, function(plt) {
-                    plt <- plt +
-                        xlim(0, 1.01 * max(unlist(max_x_vals)))
-                })
+                plts <- private$scale_axis(plts, "x")
             }
             
             if (input$scale_y_axis) {
-                max_y_vals <- lapply(plts, function(plt) {
-                    layer_scales(plt)$y$range$range[2]
-                })
-                
-                plts <- lapply(plts, function(plt) {
-                    plt <- plt +
-                        ylim(0, 1.01 * max(unlist(max_y_vals)))
-                })
+                plts <- private$scale_axis(plts, "y")
             }
+            
+            # if (input$scale_x_axis) {
+            #     max_x_vals <- lapply(plts, function(plt) {
+            #         layer_scales(plt)$x$range$range[2]
+            #     })
+            # 
+            #     plts <- lapply(plts, function(plt) {
+            #         plt <- plt +
+            #             xlim(0, 1.01 * max(unlist(max_x_vals)))
+            #     })
+            # }
+            # 
+            # if (input$scale_y_axis) {
+            #     max_y_vals <- lapply(plts, function(plt) {
+            #         layer_scales(plt)$y$range$range[2]
+            #     })
+            #     
+            #     plts <- lapply(plts, function(plt) {
+            #         plt <- plt +
+            #             ylim(0, 1.01 * max(unlist(max_y_vals)))
+            #     })
+            # }
             
             plts
         },
@@ -243,6 +251,7 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_general_scatter = function(datasets, input, contrast_suffix, outlier_sets) {
+            
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
@@ -272,14 +281,14 @@ MasterWidgetPlotFuncs <- R6Class(
                 
                 plts[[contrast]] <- plt
             }
+  
             
-            if (input$scaleaxis) {
-                max_vals <- lapply(plts, function(plt) {
-                    layer_scales(plt)$y$range$range[2]
-                })
-                plts <- lapply(plts, function(plt) {
-                    plt <- plt + ylim(0, 1.01 * max(unlist(max_vals)))
-                })
+            if (input$scalexaxis) {
+                plts <- private$scale_axis(plts, "x")
+            }
+            
+            if (input$scaleyaxis) {
+                plts <- private$scale_axis(plts, "y")
             }
             
             plts
@@ -400,6 +409,32 @@ MasterWidgetPlotFuncs <- R6Class(
             make.names(gsub(
                 paste0(".", contrast_suffix), "", 
                 row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]))
+        },
+        
+        scale_axis <- function(plts, axis, padding_fraction=0.01) {
+            
+            if (axis == "x") {
+                lim_func <- ggplot2::xlim
+            }
+            else if (axis == "y") {
+                lim_func <- ggplot2::ylim
+            }
+            else {
+                stop("Unknown axis: '", axis, "', only allowed are: 'x' and 'y'")
+            }
+            
+            min_vals <- lapply(plts, function(plt) {
+                layer_scales(plt)[[axis]]$range$range[1]
+            })
+            max_vals <- lapply(plts, function(plt) {
+                layer_scales(plt)[[axis]]$range$range[2]
+            })
+            plts <- lapply(plts, function(plt) {
+                min_val <- min(unlist(min_vals))
+                max_val <- max(unlist(max_vals))
+                plt <- plt + lim_func(min_val - 0.01 * abs(min_val), max_val + 0.01 * abs(max_val))
+            })
+            plts
         }
     )
 )

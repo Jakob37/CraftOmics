@@ -103,7 +103,9 @@ MasterWidget <- R6Class(
                                         selectInput("scatter_y", "Y-axis:", selected=contrast_suffixes[1], choices=contrast_suffixes),
                                         selectInput("scatter_color", "Color cond:", selected="adj.P.Val", choices=contrast_suffixes),
                                         numericInput("scatter_color_cutoff", "Color cutoff:", value=0.05, min=0, max=1),
-                                        checkboxInput("scatter_minuslog_y", "Minus-log y:", value=FALSE)
+                                        checkboxInput("scatter_minuslog_y", "Minus-log y (for Vulcano)", value=FALSE),
+                                        checkboxInput("scalexaxis", "Scale X-axis", value=FALSE),
+                                        checkboxInput("scaleyaxis", "Scale Y-axis", value=FALSE)
                                     ),
                                     
                                     # Table
