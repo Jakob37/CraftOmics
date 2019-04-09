@@ -113,15 +113,14 @@ MasterWidget <- R6Class(
                                         condition = "input.tabs == 'Table'",
                                         #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
                                         #             selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
-                                        #             selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_filter),
-                                        #             splitLayout(
-                                        #                 sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
-                                        #                 sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
-                                        #             ),
+                                        selectInput("table_filters", "Filter fields", choices=annot_col_names, multiple=TRUE),
+                                        checkboxInput("table_filter_less_than", "Filter less than", value=TRUE),
+                                        numericInput("table_filterthres", "Filter thres.", value=0.1, min=0, max=1, step=0.01),
+                                        sliderInput("tabel_decimals", "Decimals", 2, min=0, max=10, step=1),
                                         #             checkboxInput("exclusive", "Only show significant in all groups"),
                                         #             downloadButton('download', "Download Table"),
                                         #             DT::dataTableOutput("table")
-                                        selectInput("fields", "Shown fields", choices=annot_col_names, multiple=TRUE, selected=annot_col_names[1:5])
+                                        selectInput("table_fields", "Shown fields", choices=annot_col_names, multiple=TRUE, selected=annot_col_names[1:5])
                                     )
                                  ),
                                 tabPanel(
@@ -338,9 +337,10 @@ MasterWidget <- R6Class(
                     )
 
                     observe({
-                        private$update_input_choices(session, datasets, "cond1", input$data1, input$cond1)
-                        private$update_input_choices(session, datasets, "cond2", input$data2, input$cond2)
-                        private$update_input_choices(session, datasets, "text_labels", input$data1, input$text_labels)
+                        private$update_input_choices(session, colnames(colData(datasets[[input$data1]])), "cond1", input$data1, input$cond1)
+                        private$update_input_choices(session, colnames(colData(datasets[[input$data2]])), "cond2", input$data2, input$cond2)
+                        private$update_input_choices(session, colnames(colData(datasets[[input$data1]])), "text_labels", input$data1, input$text_labels)
+                        private$update_input_choices(session, colnames(rowData(datasets[[input$stat_data]])), "table_fields", input$stat_data, input$table_fields)
                         private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
                         
                         # For dynamic UI, maybe check:
@@ -606,11 +606,12 @@ MasterWidget <- R6Class(
             if (colorscatter) plt + target_geom(aes(color=color))
             else plt + target_geom(na.rm=TRUE)
         },
-        update_input_choices = function(session, datasets, target, data_name, cond_name) {
+        update_input_choices = function(session, choices, target, data_name, cond_name) {
             
-            choices <- colnames(colData(datasets[[data_name]]))
-            if (cond_name %in% choices) selected <- cond_name
-            else selected <- default_cond
+            # browser()
+            
+            if (all(cond_name %in% choices)) selected <- cond_name
+            else selected <- choices[[1]]
             
             updateSelectInput(
                 session,

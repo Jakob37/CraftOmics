@@ -186,28 +186,6 @@ MasterWidgetPlotFuncs <- R6Class(
                 plts <- private$scale_axis(plts, "y")
             }
             
-            # if (input$scale_x_axis) {
-            #     max_x_vals <- lapply(plts, function(plt) {
-            #         layer_scales(plt)$x$range$range[2]
-            #     })
-            # 
-            #     plts <- lapply(plts, function(plt) {
-            #         plt <- plt +
-            #             xlim(0, 1.01 * max(unlist(max_x_vals)))
-            #     })
-            # }
-            # 
-            # if (input$scale_y_axis) {
-            #     max_y_vals <- lapply(plts, function(plt) {
-            #         layer_scales(plt)$y$range$range[2]
-            #     })
-            #     
-            #     plts <- lapply(plts, function(plt) {
-            #         plt <- plt +
-            #             ylim(0, 1.01 * max(unlist(max_y_vals)))
-            #     })
-            # }
-            
             plts
         },
         
@@ -357,10 +335,28 @@ MasterWidgetPlotFuncs <- R6Class(
         # },
         
         do_table = function(datasets, input, outlier_sets) {
+
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
             # contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
 
-            dobs[[1]]$adf %>% dplyr::select(input$fields)
+            full_adf <- dobs[[1]]$adf
+            
+            if (length(input$table_filters) > 0) {
+                if (input$table_filter_less_than) {
+                    filter_adf <- full_adf %>% dplyr::filter(UQ(as.name(input$table_filters[1])) < input$table_filterthres)
+                }
+                else {
+                    filter_adf <- full_adf %>% dplyr::filter(UQ(as.name(input$table_filters[1])) > input$table_filterthres)
+                }
+            }
+            else {
+                filter_adf <- full_adf
+            }
+            
+            target_adf <- filter_adf %>% dplyr::select(input$table_fields) %>% data.frame() 
+            
+            target_adf
+            # raw_df <- dobs[[1]]$adf 
         },
         
         do_profile = function(datasets, input) {
@@ -411,7 +407,7 @@ MasterWidgetPlotFuncs <- R6Class(
                 row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]))
         },
         
-        scale_axis <- function(plts, axis, padding_fraction=0.01) {
+        scale_axis = function(plts, axis, padding_fraction=0.01) {
             
             if (axis == "x") {
                 lim_func <- ggplot2::xlim
