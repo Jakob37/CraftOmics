@@ -336,27 +336,27 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_table = function(datasets, input, outlier_sets) {
 
+            
+            
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
-            # contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
+            filter_adf <- dobs[[1]]$adf
+            
+            all_filters <- unique(c(
+                input$table_filters, 
+                unique(private$get_contrast_fields(filter_adf, input$contrast_filters))
+            ))
+            
+            if (length(all_filters) > 0) {
+                filter_adf <- private$multi_filter_table(filter_adf, all_filters, input$table_filterthres, input$table_filter_less_than, exclusive=input$table_exclusive_filter, verbose=TRUE)
+            }
 
-            full_adf <- dobs[[1]]$adf
-            
-            if (length(input$table_filters) > 0) {
-                if (input$table_filter_less_than) {
-                    filter_adf <- full_adf %>% dplyr::filter(UQ(as.name(input$table_filters[1])) < input$table_filterthres)
-                }
-                else {
-                    filter_adf <- full_adf %>% dplyr::filter(UQ(as.name(input$table_filters[1])) > input$table_filterthres)
-                }
-            }
-            else {
-                filter_adf <- full_adf
-            }
-            
-            target_adf <- filter_adf %>% dplyr::select(input$table_fields) %>% data.frame() 
-            
+            select_fields <- unique(c(
+                input$table_fields, 
+                unique(private$get_contrast_fields(filter_adf, input$table_contrast_fields))
+            ))
+
+            target_adf <- filter_adf %>% dplyr::select(select_fields) %>% data.frame() 
             target_adf
-            # raw_df <- dobs[[1]]$adf 
         },
         
         do_profile = function(datasets, input) {
@@ -400,11 +400,15 @@ MasterWidgetPlotFuncs <- R6Class(
         }
     ),
     private = list(
-        get_contrasts_from_suffix = function(row_data_cols, contrast_suffix) {
+        get_contrasts_from_suffix = function(row_data_cols, contrast_suffix, include_suffix=FALSE) {
             
-            make.names(gsub(
+            contrasts <- make.names(gsub(
                 paste0(".", contrast_suffix), "", 
                 row_data_cols[grepl(paste0(contrast_suffix, "$"), row_data_cols)]))
+            if (include_suffix) {
+                contrasts <- paste(contrasts, contrast_suffix, sep=".")
+            }
+            contrasts
         },
         
         scale_axis = function(plts, axis, padding_fraction=0.01) {
@@ -431,6 +435,60 @@ MasterWidgetPlotFuncs <- R6Class(
                 plt <- plt + lim_func(min_val - 0.01 * abs(min_val), max_val + 0.01 * abs(max_val))
             })
             plts
+        },
+        
+        multi_filter_table = function(raw_df, filters, filter_thres, filter_less_than, exclusive=FALSE, verbose=TRUE) {
+            
+            raw_df$temp_id <- seq_len(nrow(raw_df))
+            filter_adf <- raw_df
+            
+            if (verbose) {
+                message("Before filtering: ", nrow(filter_adf), " rows")            
+            }
+            
+            for (filter in filters) {
+                
+                non_exclusive_ids <- list()
+                
+                if (exclusive) {
+                    filter_adf <- private$do_filter(filter_adf, filter, filter_thres, greater_than=!filter_less_than)
+                    if (verbose) {
+                        message("Filtering: ", filter, " retained rows: ", nrow(filter_adf))
+                    }
+                }
+                else {
+                    
+                    temp_filter_adf <- private$do_filter(raw_df, filter, filter_thres, greater_than=filter_less_than)
+                    non_exclusive_ids[[filter]] <- temp_filter_adf$temp_id
+                }
+                
+            }
+            
+            if (!exclusive) {
+                all_non_exclusive_ids <- sort(unique(unlist(non_exclusive_ids)))
+                raw_df %>% dplyr::filter(temp_id %in% all_non_exclusive_ids) %>% dplyr::select(-temp_id)
+            }
+            else {
+                filter_adf %>% dplyr::select(-temp_id)
+            }
+        },
+        
+        do_filter = function(df, field, value, greater_than=FALSE) {
+            if (greater_than) {
+                df %>% dplyr::filter(UQ(as.name(field)) > value)
+            }
+            else {
+                df %>% dplyr::filter(UQ(as.name(field)) < value)
+            }
+        },
+        
+        get_contrast_fields = function(adf, contrast_filters) {
+            fields <- c()
+            for (contrast_suffix in contrast_filters) {
+                contrast_fields <- private$get_contrasts_from_suffix(colnames(adf), contrast_suffix, include_suffix=TRUE)
+                fields <- unique(c(fields, contrast_fields))
+            }
+            fields
         }
     )
 )

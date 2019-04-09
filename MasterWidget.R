@@ -74,7 +74,7 @@ MasterWidget <- R6Class(
                                     
                                     conditionalPanel(
                                         condition = "input.tabs == 'Venns' || input.tabs == 'Hists' || input.tabs == 'Scatter' || input.tabs == 'Table'",
-                                        selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names, size=20, selectize=FALSE)
+                                        selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names)
                                     ),
                                     
                                     # Histograms
@@ -114,13 +114,18 @@ MasterWidget <- R6Class(
                                         #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
                                         #             selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
                                         selectInput("table_filters", "Filter fields", choices=annot_col_names, multiple=TRUE),
-                                        checkboxInput("table_filter_less_than", "Filter less than", value=TRUE),
-                                        numericInput("table_filterthres", "Filter thres.", value=0.1, min=0, max=1, step=0.01),
+                                        selectInput("contrast_filters", "Contrast filters", choices=contrast_suffixes, multiple=TRUE),
+                                        splitLayout(
+                                            checkboxInput("table_filter_less_than", "Filter <", value=TRUE),
+                                            checkboxInput("table_exclusive_filter", "Exclusive filtering", value=TRUE)
+                                        ),
+                                        sliderInput("table_filterthres", "Filter thres.", value=0.1, min=0, max=1, step=0.01),
                                         sliderInput("tabel_decimals", "Decimals", 2, min=0, max=10, step=1),
                                         #             checkboxInput("exclusive", "Only show significant in all groups"),
                                         #             downloadButton('download', "Download Table"),
                                         #             DT::dataTableOutput("table")
-                                        selectInput("table_fields", "Shown fields", choices=annot_col_names, multiple=TRUE, selected=annot_col_names[1:5])
+                                        selectInput("table_fields", "Shown fields", choices=annot_col_names, multiple=TRUE, selected=annot_col_names[1:5]),
+                                        selectInput("table_contrast_fields", "Shown contrast fields", choices=contrast_suffixes, multiple=TRUE)
                                     )
                                  ),
                                 tabPanel(
@@ -271,7 +276,6 @@ MasterWidget <- R6Class(
                     })
                     
                     output$Table = renderDT({
-                        # iris
                         pf$do_table(datasets, input, outlier_sets)
                     }, options = list(lengthChange = TRUE))
                     
@@ -342,6 +346,9 @@ MasterWidget <- R6Class(
                         private$update_input_choices(session, colnames(colData(datasets[[input$data1]])), "text_labels", input$data1, input$text_labels)
                         private$update_input_choices(session, colnames(rowData(datasets[[input$stat_data]])), "table_fields", input$stat_data, input$table_fields)
                         private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
+                        if (length(input$contrast_filters) > 0) {
+                            private$update_input_range(session, datasets, "table_filterthres", input$stat_data, paste(contrasts, input$contrast_filters, sep="."))
+                        }
                         
                         # For dynamic UI, maybe check:
                         # https://shiny.rstudio.com/articles/dynamic-ui.html
