@@ -311,16 +311,16 @@ MasterWidgetPlotFuncs <- R6Class(
         #         filtered_selected
         #     })
         #     
-            # observe({
-            #     new_choices <- colnames(rowData(stat_data[[input$data]]))
-            #     updateSelectInput(
-            #         session,
-            #         "fields",
-            #         choices=new_choices,
-            #         selected=input$fields
-            #     )
-            # })
-            # 
+        # observe({
+        #     new_choices <- colnames(rowData(stat_data[[input$data]]))
+        #     updateSelectInput(
+        #         session,
+        #         "fields",
+        #         choices=new_choices,
+        #         selected=input$fields
+        #     )
+        # })
+        # 
         #     output$table = DT::renderDataTable({
         #         
         #         thedata() %>% 
@@ -336,8 +336,6 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_table = function(datasets, input, outlier_sets) {
 
-            
-            
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
             filter_adf <- dobs[[1]]$adf
             
@@ -347,7 +345,14 @@ MasterWidgetPlotFuncs <- R6Class(
             ))
             
             if (length(all_filters) > 0) {
-                filter_adf <- private$multi_filter_table(filter_adf, all_filters, input$table_filterthres, input$table_filter_less_than, exclusive=input$table_exclusive_filter, verbose=TRUE)
+                filter_adf <- private$multi_filter_table(
+                    filter_adf, 
+                    all_filters, 
+                    input$table_filterthres, 
+                    input$table_filter_less_than, 
+                    exclusive=input$table_exclusive_filter, 
+                    verbose=TRUE
+                )
             }
 
             select_fields <- unique(c(
@@ -355,7 +360,18 @@ MasterWidgetPlotFuncs <- R6Class(
                 unique(private$get_contrast_fields(filter_adf, input$table_contrast_fields))
             ))
 
-            target_adf <- filter_adf %>% dplyr::select(select_fields) %>% data.frame() 
+            target_adf <- filter_adf %>% dplyr::select(select_fields) %>% data.frame()
+            if (input$table_short_contrast_names) {
+                colnames(target_adf) <- vapply(
+                    colnames(target_adf),
+                    function(name, out_len) {
+                        substr(name, str_length(name)-out_len, str_length(name))
+                    },
+                    "",
+                    out_len=20
+                )
+            }
+            
             target_adf
         },
         

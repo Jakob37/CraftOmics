@@ -117,7 +117,8 @@ MasterWidget <- R6Class(
                                         selectInput("contrast_filters", "Contrast filters", choices=contrast_suffixes, multiple=TRUE),
                                         splitLayout(
                                             checkboxInput("table_filter_less_than", "Filter <", value=TRUE),
-                                            checkboxInput("table_exclusive_filter", "Exclusive filtering", value=TRUE)
+                                            checkboxInput("table_exclusive_filter", "Exclusive filtering", value=TRUE),
+                                            checkboxInput("table_short_contrast_names", "Short contrast names", value=FALSE)
                                         ),
                                         sliderInput("table_filterthres", "Filter thres.", value=0.1, min=0, max=1, step=0.01),
                                         sliderInput("tabel_decimals", "Decimals", 2, min=0, max=10, step=1),
