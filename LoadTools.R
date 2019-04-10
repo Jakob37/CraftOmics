@@ -47,10 +47,10 @@ LoadTools <- R6Class(
         split_dataset = function(data_fp, design_fp, split1_data_fp, split1_design_fp, 
                        split2_data_fp, split2_design_fp, sample_col, split_col) {
             
-            rdf <- read_tsv(data_fp)
-            ddf <- read_tsv(design_fp)
-            sdf <- rdf %>% select(one_of(ddf[[sample_col]]))
-            adf <- rdf %>% select(-one_of(ddf[[sample_col]]))
+            rdf <- readr::read_tsv(data_fp, col_types=readr::cols())
+            ddf <- readr::read_tsv(design_fp, col_types=readr::cols())
+            sdf <- rdf %>% dplyr::select(dplyr::one_of(ddf[[sample_col]]))
+            adf <- rdf %>% dplyr::select(-dplyr::one_of(ddf[[sample_col]]))
             
             split_levels <- unique(ddf[[split_col]])
             if (length(split_levels) != 2) {

@@ -13,7 +13,7 @@ pf <- MasterWidgetPlotFuncs$new()
 MasterWidget <- R6Class(
     public = list(
         general_qual_widget = function(datasets, outlier_sets=NULL, height=800, default_cond=NULL, 
-                                       interactive=TRUE, contrast_suffix=NULL) {
+                                       interactive=TRUE, contrast_suffix=NULL, default_sample=NULL) {
             
             dataset_names <- names(datasets)
             default_name <- dataset_names[1]
@@ -62,6 +62,9 @@ MasterWidget <- R6Class(
                                 type = "tabs",
                                 tabPanel(
                                     "Settings",
+                                    
+                                    selectInput("samplecol", "Sample column:", selected=default_sample, choices=colnames(colData(dataset))),
+                                    
                                     # General
                                     conditionalPanel(
                                         condition = "input.tabs == 'Barplot' || input.tabs == 'QQ' || input.tabs == 'Density' || input.tabs == 'PCA' || input.tabs == 'Cluster'",
@@ -243,6 +246,7 @@ MasterWidget <- R6Class(
                     })
                     
                     output$Density = renderPlot({
+                        message("Density")
                         plt <- pf$do_density(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })

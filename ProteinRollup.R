@@ -60,7 +60,8 @@ ProteinRollup <- R6Class(
             df
         },
         
-        protein_rollup_on_matrix = function(design_fp, data_fp, protein_col, peptide_col, sample_col, out_fp, rollup_func="rrollup") {
+        protein_rollup_on_matrix = function(design_fp, data_fp, protein_col, peptide_col, sample_col, out_fp, rollup_func="rrollup",
+            protein_col_name="Protein") {
             
             ddf <- read_tsv(design_fp, col_types=cols())
             raw_rdf <- read_tsv(data_fp, col_types=cols())
@@ -71,7 +72,7 @@ ProteinRollup <- R6Class(
                 message("Trimmed ", trimmed_count, " proteins with missing IDs")
             }
             
-            sdf <- rdf %>% dplyr::select(one_of(ddf[[sample_col]]))
+            sdf <- rdf %>% dplyr::select(dplyr::one_of(ddf[[sample_col]]))
             
             protein_data <- rdf %>% dplyr::select(protein_col) %>% unlist()
             peptide_data <- rdf %>% dplyr::select(peptide_col) %>% unlist()
@@ -85,12 +86,12 @@ ProteinRollup <- R6Class(
                 stop("Unknown rollup func: ", rollup_func)
             }
             
-            prot_sdf <- self$protein_rollup(peptide_data, protein_data, as.matrix(sdf), rollup_func=rollup)
+            prot_sdf <- self$protein_rollup(peptide_data, protein_data, as.matrix(sdf), rollup_func=rollup, protein_col_name=protein_col_name)
             write_tsv(prot_sdf, path=out_fp)
         },
         
         # Inspired by DANTE and pmartR
-        protein_rollup = function(pep_ids, protein_ids, pep_mat, rollup_func=self$rrollup) {
+        protein_rollup = function(pep_ids, protein_ids, pep_mat, rollup_func=self$rrollup, protein_col_name="Protein") {
             
             warning("protein_rollup: Use on your own risk, mostly untested")
             
@@ -112,7 +113,9 @@ ProteinRollup <- R6Class(
                 pep_counts[[protein]] <- nrow(current_peps_only)
             }
 
-            cbind(Protein=unique_proteins, Peptides=unlist(pep_counts), data.frame(do.call("rbind", pep_results)))
+            annot_df <- data.frame(Protein=unique_proteins)
+            colnames(annot_df) <- c(protein_col_name)
+            cbind(annot_df, data.frame(do.call("rbind", pep_results)))
         },
         
         # Based on InfernoRDN

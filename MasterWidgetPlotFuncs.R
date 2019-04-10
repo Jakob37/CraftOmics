@@ -1,6 +1,5 @@
 library(R6)
 library(tidyverse)
-
 library(ggpubr)
 
 MasterWidgetPlotFuncs <- R6Class(
@@ -67,8 +66,9 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_bar = function(datasets, input, outlier_sets) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             plts <- list()
+            
             for (i in seq_len(2)) {
                 plts[[i]] <- ev$abundance_bars(
                     dobs[[i]]$sdf, 
@@ -83,9 +83,14 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_density = function(datasets, input, outlier_sets) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
+            
+            message("In density")
+            
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (input$fulldata) usecount <- NULL
             else usecount <- input$subset
+            
+            message("Before plotting")
             
             plts <- list()
             for (i in seq_len(2)) {
@@ -101,7 +106,9 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_qq = function(datasets, input, outlier_sets) {
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
+            message("In QQ")
+            
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (input$fulldata) usecount <- NULL
             else usecount <- input$subset
             
@@ -120,7 +127,7 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_pca = function(datasets, input, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (!input$as_label) label <- NULL
             else label <- dobs[[1]]$ddf[, input$text_labels]
             
@@ -144,7 +151,7 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_cluster = function(datasets, input, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (!input$as_label) label <- NULL
             else label <- dobs[[1]]$ddf[, input$text_labels]
             
@@ -160,7 +167,7 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_hists = function(datasets, input, contrast_suffix, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$samplecol, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             plts <- list()
@@ -191,7 +198,7 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_venns = function(datasets, input, contrast_suffix, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$samplecol, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             if (length(contrasts) < 2) {
@@ -230,7 +237,7 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_general_scatter = function(datasets, input, contrast_suffix, outlier_sets) {
             
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$samplecol, input$checkgroup, outlier_sets)
             contrasts <- private$get_contrasts_from_suffix(colnames(dobs[[1]]$adf), contrast_suffix)
             
             plts <- list()
@@ -336,7 +343,7 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_table = function(datasets, input, outlier_sets) {
 
-            dobs <- self$get_preproc_list(datasets, input$stat_data, input$checkgroup, outlier_sets)
+            dobs <- self$get_preproc_list(datasets, input$stat_data, input$samplecol, input$checkgroup, outlier_sets)
             filter_adf <- dobs[[1]]$adf
             
             all_filters <- unique(c(
@@ -379,7 +386,7 @@ MasterWidgetPlotFuncs <- R6Class(
             ggplot() + ggtitle("Profile currently not implemented") + theme_classic()
         },
         
-        get_preproc_list = function(datasets, dataset_names, checkgroup, outlier_sets) {
+        get_preproc_list = function(datasets, dataset_names, sample_col, checkgroup, outlier_sets) {
             
             outliers <- unname(unlist(outlier_sets[checkgroup]))
             
@@ -387,7 +394,7 @@ MasterWidgetPlotFuncs <- R6Class(
             for (i in seq_len(length(dataset_names))) {
                 
                 dataset_name <- dataset_names[i]
-                dataset_obj <- self$parse_dataset(datasets[[dataset_name]], outliers)
+                dataset_obj <- self$parse_dataset(datasets[[dataset_name]], sample_col, outliers)
                 dataset_obj$title <- paste("Dataset:", dataset_name)
                 dataset_obj$outliers <- outliers
                 dataset_objs[[i]] <- dataset_obj
@@ -396,7 +403,7 @@ MasterWidgetPlotFuncs <- R6Class(
             dataset_objs
         },
         
-        parse_dataset = function(dataset, outliers=NULL, target_assay=1) {
+        parse_dataset = function(dataset, sample_col, outliers=NULL, target_assay=1) {
             
             if (typeof(target_assay) == "character" && !(target_assay %in% names(assays(dataset)))) {
                 stop("Unknown character target_assay: ", target_assay)
@@ -410,7 +417,7 @@ MasterWidgetPlotFuncs <- R6Class(
             }
             
             sdf <- assays(dataset)[[target_assay]][, non_outliers]
-            ddf <- data.frame(colData(dataset)) %>% filter(sample %in% non_outliers)
+            ddf <- data.frame(colData(dataset)) %>% filter(UQ(as.name(sample_col)) %in% non_outliers)
             adf <- rowData(dataset) %>% data.frame()
             list("sdf"=sdf, "ddf"=ddf, "adf"=adf)
         }
