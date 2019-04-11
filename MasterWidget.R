@@ -76,7 +76,7 @@ MasterWidget <- R6Class(
                                     ),
                                     
                                     conditionalPanel(
-                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists' || input.tabs == 'Scatter' || input.tabs == 'Table'",
+                                        condition = "input.tabs == 'Venns' || input.tabs == 'Hists' || input.tabs == 'Scatter' || input.tabs == 'Table' || input.tabs == 'Spotcheck'",
                                         selectInput("stat_data", "Dataset:", selected=default_name, choices=dataset_names)
                                     ),
                                     
@@ -135,9 +135,12 @@ MasterWidget <- R6Class(
                                     # Spotcheck
                                     conditionalPanel(
                                         condition = "input.tabs == 'Spotcheck'",
-                                        selectInput("rowid", "Spot ID", choices=seq_len(100), selected=1),
-                                        selectInput("spot_split_col", "Split column", choices=colnames(colData(dataset)), multiple=TRUE),
-                                        selectInput("spot_comp_col", "Compare column", choices=colnames(colData(dataset)), selected=colnames(colData(dataset))[1])
+                                        numericInput("rowid", "Spot ID", value=1),
+                                        selectInput("spot_split_col", "Split column", choices=c("", colnames(colData(dataset))), selected=""),
+                                        selectInput("spot_comp_col", "Compare column", choices=colnames(colData(dataset)), selected=default_cond),
+                                        selectInput("spot_color_col", "Color column", choices=c("", colnames(colData(dataset))), selected=""),
+                                        checkboxInput("spot_show_labels", "Show sample names", value=FALSE),
+                                        checkboxInput("spot_show_boxplot", "Show boxplot", value=FALSE)
                                     )
                                  ),
                                 tabPanel(
@@ -289,9 +292,19 @@ MasterWidget <- R6Class(
                         pf$annotate(plts, input)
                     })
                     
-                    output$Table = renderDT({
+                    output$Table = DT::renderDataTable({
                         pf$do_table(datasets, input, outlier_sets)
-                    }, options = list(lengthChange = TRUE))
+                    }, options = list(
+                        # lengthChange=TRUE, 
+                        autoWidth=TRUE,
+                        columnDefs = list(list(width = '200px', targets = "_all"))
+                        )
+                    )
+                    
+                    # options = list(
+                    #     autoWidth = TRUE,
+                    #     columnDefs = list(list(width = '200px', targets = "_all"))
+                    # ))
                     
                     output$Profile = renderPlot({
                         pf$do_profile(datasets, input)
@@ -524,31 +537,31 @@ MasterWidget <- R6Class(
             
             plt + target_geom(na.rm=TRUE)
         },
-        make_box = function(row_ses, title, contrast_cond, label_type, color, showlabels, colorscatter) {
-            expr_vals <- assay(row_ses)[1, ]
-            high_fert <- colData(row_ses[1, ])[[contrast_cond]]
-            label_names <- colData(row_ses)[, label_type]
-
-            stat_df <- data.frame(
-                expr=expr_vals, 
-                high_fert=high_fert, 
-                color=colData(row_ses[1, ])[[color]],
-                labels=label_names
-            )
-            
-            plt <- ggplot(
-                stat_df, 
-                aes(x=high_fert, y=expr_vals, fill=high_fert, label=labels)
-            ) + 
-                geom_boxplot(alpha=0.5, na.rm=TRUE) + 
-                theme_classic()
-            
-            if (showlabels) target_geom <- geom_text
-            else target_geom <- geom_point
-            
-            if (colorscatter) plt + target_geom(aes(color=color))
-            else plt + target_geom(na.rm=TRUE)
-        },
+        # make_box = function(row_ses, title, contrast_cond, label_type, color, showlabels, colorscatter) {
+        #     expr_vals <- assay(row_ses)[1, ]
+        #     high_fert <- colData(row_ses[1, ])[[contrast_cond]]
+        #     label_names <- colData(row_ses)[, label_type]
+        # 
+        #     stat_df <- data.frame(
+        #         expr=expr_vals, 
+        #         high_fert=high_fert, 
+        #         color=colData(row_ses[1, ])[[color]],
+        #         labels=label_names
+        #     )
+        #     
+        #     plt <- ggplot(
+        #         stat_df, 
+        #         aes(x=high_fert, y=expr_vals, fill=high_fert, label=labels)
+        #     ) + 
+        #         geom_boxplot(alpha=0.5, na.rm=TRUE) + 
+        #         theme_classic()
+        #     
+        #     if (showlabels) target_geom <- geom_text
+        #     else target_geom <- geom_point
+        #     
+        #     if (colorscatter) plt + target_geom(aes(color=color))
+        #     else plt + target_geom(na.rm=TRUE)
+        # },
         update_input_choices = function(session, choices, target, data_name, cond_name) {
             
             # browser()

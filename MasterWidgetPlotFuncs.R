@@ -293,7 +293,7 @@ MasterWidgetPlotFuncs <- R6Class(
             non_outliers <- colnames(target_se_row)[!colnames(target_se_row) %in% outliers]
             target_se_row <- target_se_row[, non_outliers]
             
-            if (length(input$spot_split_col) > 0) {
+            if (input$spot_split_col != "") {
 
                 unique_levels <- sort(unique(colData(target_se_row)[[input$spot_split_col]]))
                 split_inds_list <- lapply(
@@ -305,7 +305,7 @@ MasterWidgetPlotFuncs <- R6Class(
             }
             else {
                 split_inds_list <- list(seq_len(ncol(target_se_row)))
-                names(split_inds_list) <- "NAME"
+                names(split_inds_list) <- "No split"
             }
 
             plts <- list()
@@ -320,11 +320,29 @@ MasterWidgetPlotFuncs <- R6Class(
                     cond=as.factor(colData(target_se_split)[[input$spot_comp_col]])
                 )
                 
-                plts[[split_name]] <- ggplot(split_long_df, aes(x=cond, y=value, color=cond)) + 
-                    geom_boxplot() + 
-                    geom_point() + 
+                if (input$spot_color_col != "") {
+                    split_long_df <- cbind(split_long_df, color=as.factor(colData(target_se_split)[[input$spot_color_col]]))
+                }
+                else {
+                    split_long_df <- cbind(split_long_df, color=as.factor(colData(target_se_split)[[input$spot_comp_col]]))
+                }
+
+                plt <- ggplot(split_long_df, aes_string(x="cond", y="value", color="color", label="sample")) + 
                     theme_classic() +
                     ggtitle(split_name)
+                
+                if (input$spot_show_boxplot) {
+                    plt <- plt + geom_boxplot()
+                }
+                
+                if (input$spot_show_labels) {
+                    plt <- plt + geom_label()
+                }
+                else {
+                    plt <- plt + geom_point()
+                }
+                
+                plts[[split_name]] <- plt
             }
             plts
         },
@@ -356,17 +374,6 @@ MasterWidgetPlotFuncs <- R6Class(
             ))
 
             target_adf <- filter_adf %>% dplyr::select(select_fields) %>% data.frame()
-            if (input$table_short_contrast_names) {
-                colnames(target_adf) <- vapply(
-                    colnames(target_adf),
-                    function(name, out_len) {
-                        substr(name, str_length(name)-out_len, str_length(name))
-                    },
-                    "",
-                    out_len=20
-                )
-            }
-            
             target_adf
         },
         
