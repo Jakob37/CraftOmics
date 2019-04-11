@@ -85,13 +85,9 @@ MasterWidgetPlotFuncs <- R6Class(
         
         do_density = function(datasets, input, outlier_sets) {
             
-            message("In density")
-            
             dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (input$fulldata) usecount <- NULL
             else usecount <- input$subset
-            
-            message("Before plotting")
             
             plts <- list()
             for (i in seq_len(2)) {
@@ -127,8 +123,6 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_pca = function(datasets, input, outlier_sets) {
-            
-            message("Plotting PCAs")
             
             dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (!input$as_label) label <- NULL

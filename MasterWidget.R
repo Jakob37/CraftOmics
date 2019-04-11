@@ -120,8 +120,8 @@ MasterWidget <- R6Class(
                                         selectInput("contrast_filters", "Contrast filters", choices=contrast_suffixes, multiple=TRUE),
                                         splitLayout(
                                             checkboxInput("table_filter_less_than", "Filter <", value=TRUE),
-                                            checkboxInput("table_exclusive_filter", "Exclusive filtering", value=TRUE),
-                                            checkboxInput("table_short_contrast_names", "Short contrast names", value=FALSE)
+                                            checkboxInput("table_exclusive_filter", "Exclusive filtering", value=TRUE)
+                                            # checkboxInput("table_short_contrast_names", "Short contrast names", value=FALSE)
                                         ),
                                         sliderInput("table_filterthres", "Filter thres.", value=0.1, min=0, max=1, step=0.01),
                                         sliderInput("tabel_decimals", "Decimals", 2, min=0, max=10, step=1),
@@ -171,7 +171,7 @@ MasterWidget <- R6Class(
                                         textInput(inputId="legend_fill", label="Leg. lab. Fill", value=""),
                                         selectInput(inputId="legend_pos", label="Legend: Pos", selected="bottom", 
                                                     choices = c("top", "bottom", "left", "right")),
-                                        checkboxInput(inputId="legend_common", label="Legend: Common", value=TRUE),
+                                        checkboxInput(inputId="legend_common", label="Legend: Common", value=FALSE),
                                         numericInput(inputId="title_size", label="Title size", value=14, step=1, min=4),
                                         numericInput(inputId="subtitle_size", label="Subtitle size", value=14, step=1, min=4),
                                         numericInput(inputId="axis_size", label="Label size", value=12, step=1, min=4),
@@ -247,13 +247,11 @@ MasterWidget <- R6Class(
                     })
                     
                     output$Density = renderPlot({
-                        message("Density")
                         plt <- pf$do_density(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
                     
                     output$PCA = renderPlot({
-                        message("Before PCA")
                         plt <- pf$do_pca(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
@@ -348,6 +346,14 @@ MasterWidget <- R6Class(
                     )
 
                     observe({
+
+                        get_current_contrasts <- function(datasets, curr_data, contrast_suffix) {
+                            dataset <- datasets[[curr_data]]
+                            annot_col_names <- colnames(rowData(dataset))
+                            contrasts <- private$get_contrasts_from_suffix(annot_col_names, contrast_suffix)
+                        }
+                                                
+                        contrasts <- get_current_contrasts(datasets, input$stat_data, contrast_suffix)
                         
                         private$update_input_choices(session, colnames(colData(datasets[[input$data1]])), "cond1", input$data1, input$cond1)
                         private$update_input_choices(session, colnames(colData(datasets[[input$data2]])), "cond2", input$data2, input$cond2)
@@ -355,7 +361,7 @@ MasterWidget <- R6Class(
                         private$update_input_choices(session, colnames(rowData(datasets[[input$stat_data]])), "table_fields", input$stat_data, input$table_fields)
                         
                         if (input$tabs == "Venns") {
-                            private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
+                            private$update_input_range(session, datasets, "venn_thres", input$stat_data, paste(contrasts, input$venn_type, sep="."))
                         }
                         
                         if (length(input$contrast_filters) > 0) {
@@ -370,97 +376,6 @@ MasterWidget <- R6Class(
             )
         },
         
-
-
-        # table_widget = function(stat_data, height=1200, default_selected=NULL, default_filter=NULL) {
-        #     
-        #     if (is.null(default_selected)) {
-        #         default_selected <- colnames(rowData(stat_data[[1]]))
-        #     }
-        #     dataset_names <- names(stat_data)
-        #     default_name <- dataset_names[1]
-        #     full_annotation <- rowData(stat_data[[1]])
-        # 
-        #     shinyApp(
-        #         ui = fluidPage(
-        #             selectInput("data", "Dataset:", selected=default_name, choices=dataset_names),
-        #             selectInput("fields", "Shown fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_selected),
-        #             selectInput("filters", "Filter fields", choices=colnames(full_annotation), multiple=TRUE, selected=default_filter),
-        #             splitLayout(
-        #                 sliderInput("filterthres", "Filter thres.", 0.1, min=0, max=1, step=0.01),
-        #                 sliderInput("decimals", "Decimals", 2, min=0, max=10, step=1)
-        #             ),
-        #             checkboxInput("exclusive", "Only show significant in all groups"),
-        #             downloadButton('download', "Download Table"),
-        #             DT::dataTableOutput("table")
-        #         ),
-        #         server = function(input, output, session) {
-        #             
-        #             thedata <- reactive({
-        #                 
-        #                 retained <- rowData(stat_data[[input$data]]) %>% data.frame()
-        #                 if (length(input$filters) > 0) {
-        #                     
-        #                     if (input$exclusive) {
-        #                         unique_retained <- retained
-        #                         
-        #                         # Only include features passing all filters
-        #                         for (filter in input$filters) {
-        #                             unique_retained <- unique_retained %>% filter(UQ(as.name(filter)) < input$filterthres)
-        #                         }
-        #                         retained <- unique_retained
-        #                     }
-        #                     else {
-        #                         all_retained <- NULL
-        #                         for (filter in input$filters) {
-        #                             # Include features passing at least one filter
-        #                             filter_retained <- retained %>% filter(UQ(as.name(filter)) < input$filterthres)
-        #                             all_retained <- rbind(all_retained, filter_retained)
-        #                         }
-        #                         retained <- all_retained %>% distinct()
-        #                     }
-        #                 }
-        #                 
-        #                 filtered_selected <- retained %>% 
-        #                     dplyr::select(input$fields) %>%
-        #                     data.frame()
-        # 
-        #                 filtered_selected
-        #             })
-        #             
-        #             observe({
-        #                 new_choices <- colnames(rowData(stat_data[[input$data]]))
-        #                 updateSelectInput(
-        #                     session,
-        #                     "fields",
-        #                     choices=new_choices,
-        #                     selected=input$fields
-        #                 )
-        #             })
-        #             
-        #             output$table = DT::renderDataTable({
-        #                 
-        #                 thedata() %>% 
-        #                     datatable(options=list(
-        #                         pageLength=10, 
-        #                         scrollX=TRUE,
-        #                         # autoWidth=TRUE,
-        #                         columnDefs=list(list(width="10px", targets="_all"))
-        #                     )) %>%
-        #                     DT::formatRound(columns=input$fields, digits=input$decimals)
-        #             })
-        #             
-        #             output$download <- downloadHandler(
-        #                 filename = function() {"result_table.tsv"},
-        #                 content = function(fname) {
-        #                     write_tsv(thedata(), fname)
-        #                 } 
-        #             )
-        #         },
-        #         options=list(height=height)
-        #     )
-        #     
-        # },
         spotcheck_widget = function(stat_data, id_col, contrast_suffix, contrast_cond, split_col=NULL,
                                     base_height=600, default_data=NULL, default_gene=NULL, color_cond=NULL, corr_col=NULL,
                                     outlier_sets=NULL, default_label=NULL) {
