@@ -130,6 +130,14 @@ MasterWidget <- R6Class(
                                         #             DT::dataTableOutput("table")
                                         selectInput("table_fields", "Shown fields", choices=annot_col_names, multiple=TRUE, selected=annot_col_names[1:5]),
                                         selectInput("table_contrast_fields", "Shown contrast fields", choices=contrast_suffixes, multiple=TRUE)
+                                    ),
+                                    
+                                    # Spotcheck
+                                    conditionalPanel(
+                                        condition = "input.tabs == 'Spotcheck'",
+                                        selectInput("rowid", "Spot ID", choices=seq_len(100), selected=1),
+                                        selectInput("spot_split_col", "Split column", choices=colnames(colData(dataset)), multiple=TRUE),
+                                        selectInput("spot_comp_col", "Compare column", choices=colnames(colData(dataset)), selected=colnames(colData(dataset))[1])
                                     )
                                  ),
                                 tabPanel(
@@ -277,7 +285,8 @@ MasterWidget <- R6Class(
                     })
                     
                     output$Spotcheck = renderPlot({
-                        pf$do_spotcheck(datasets, input)
+                        plts <- pf$do_spotcheck(datasets, input, contrast_suffix, outlier_sets)
+                        pf$annotate(plts, input)
                     })
                     
                     output$Table = renderDT({
@@ -396,12 +405,12 @@ MasterWidget <- R6Class(
             dataset <- stat_data[[1]]
             row_ids <- rowData(dataset)[[id_col]]
 
-            if (!is.null(corr_col)) {
-                height <- base_height + 500
-            }
-            else {
-                height <- base_height + 500
-            }
+            # if (!is.null(corr_col)) {
+            #     height <- base_height + 500
+            # }
+            # else {
+            #     height <- base_height + 500
+            # }
             
             shinyApp(
                 ui = fluidPage(

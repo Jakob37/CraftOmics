@@ -276,8 +276,57 @@ MasterWidgetPlotFuncs <- R6Class(
             plts
         },
         
-        do_spotcheck = function(datasets, input) {
-            ggplot() + ggtitle("Spotcheck currently not implemented") + theme_classic()
+        do_spotcheck = function(datasets, input, contrast_suffix, outlier_sets) {
+
+            # Setup
+            target_se <- datasets[[input$stat_data]]
+            id_row_number <- which(rowData(target_se)$row_nbr == input$rowid)
+            
+            if (length(id_row_number) > 1) {
+                stop("More than one matching ID, found: ", paste(id_row_number, collapse=", "))
+            }
+            
+            target_se_row <- target_se[id_row_number, ]
+            
+            # Outliers
+            outliers <- unname(unlist(outlier_sets[input$outliers]))
+            non_outliers <- colnames(target_se_row)[!colnames(target_se_row) %in% outliers]
+            target_se_row <- target_se_row[, non_outliers]
+            
+            if (length(input$spot_split_col) > 0) {
+
+                unique_levels <- sort(unique(colData(target_se_row)[[input$spot_split_col]]))
+                split_inds_list <- lapply(
+                    unique_levels, 
+                    function(lv, split_col) { which(split_col %in% lv) }, 
+                    split_col=colData(target_se_row)[[input$spot_split_col]]
+                )
+                names(split_inds_list) <- paste(input$spot_split_col, "level", unique_levels)
+            }
+            else {
+                split_inds_list <- list(seq_len(ncol(target_se_row)))
+                names(split_inds_list) <- "NAME"
+            }
+
+            plts <- list()
+            for (split_name in names(split_inds_list)) {
+                
+                split_inds <- split_inds_list[[split_name]]
+                target_se_split <- target_se_row[, split_inds]
+                
+                split_long_df <- data.frame(
+                    sample=colnames(target_se_split),
+                    value=assay(target_se_split)[1, ],
+                    cond=as.factor(colData(target_se_split)[[input$spot_comp_col]])
+                )
+                
+                plts[[split_name]] <- ggplot(split_long_df, aes(x=cond, y=value, color=cond)) + 
+                    geom_boxplot() + 
+                    geom_point() + 
+                    theme_classic() +
+                    ggtitle(split_name)
+            }
+            plts
         },
 
         do_table = function(datasets, input, outlier_sets) {
