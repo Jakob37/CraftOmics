@@ -144,13 +144,14 @@ MasterWidget <- R6Class(
                                         selectInput("pc2_plt1", "PC2 (plot1):", choices=1:8, selected=2),
                                         selectInput("pc1_plt2", "PC1 (plot2):", choices=1:8, selected=1),
                                         selectInput("pc2_plt2", "PC2 (plot2):", choices=1:8, selected=2),
-                                        checkboxInput("pca_hide_loadings", "Hide loadings", value=FALSE)
+                                        checkboxInput("pca_hide_loadings", "Hide loadings", value=TRUE)
                                     ),
                                     
                                     conditionalPanel(
                                         condition = "input.tabs == 'Barplot'",
                                         checkboxInput("show_na", "Show NA counts", value=FALSE),
-                                        checkboxInput("show_mean", "Show mean", value=FALSE)
+                                        checkboxInput("show_mean", "Show mean", value=FALSE),
+                                        checkboxInput("bar_cond_order", "Order on condition", value=FALSE)
                                     ),
                                     
                                     conditionalPanel(
@@ -252,6 +253,7 @@ MasterWidget <- R6Class(
                     })
                     
                     output$PCA = renderPlot({
+                        message("Before PCA")
                         plt <- pf$do_pca(datasets, input, outlier_sets)
                         pf$annotate(plt, input)
                     })
@@ -346,11 +348,16 @@ MasterWidget <- R6Class(
                     )
 
                     observe({
+                        
                         private$update_input_choices(session, colnames(colData(datasets[[input$data1]])), "cond1", input$data1, input$cond1)
                         private$update_input_choices(session, colnames(colData(datasets[[input$data2]])), "cond2", input$data2, input$cond2)
                         private$update_input_choices(session, colnames(colData(datasets[[input$data1]])), "text_labels", input$data1, input$text_labels)
                         private$update_input_choices(session, colnames(rowData(datasets[[input$stat_data]])), "table_fields", input$stat_data, input$table_fields)
-                        private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
+                        
+                        if (input$tabs == "Venns") {
+                            private$update_input_range(session, datasets, "venn_thres", input$data1, paste(contrasts, input$venn_type, sep="."))
+                        }
+                        
                         if (length(input$contrast_filters) > 0) {
                             private$update_input_range(session, datasets, "table_filterthres", input$stat_data, paste(contrasts, input$contrast_filters, sep="."))
                         }

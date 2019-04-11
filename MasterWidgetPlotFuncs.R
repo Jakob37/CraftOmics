@@ -75,7 +75,8 @@ MasterWidgetPlotFuncs <- R6Class(
                     color_col=as.factor(dobs[[i]]$ddf[[input[[paste0("cond", i)]]]]), 
                     title=dobs[[i]]$title, 
                     show_missing=input$show_na, 
-                    show_average=input$show_mean
+                    show_average=input$show_mean,
+                    cond_order=input$bar_cond_order
                 )
             }
             
@@ -126,6 +127,8 @@ MasterWidgetPlotFuncs <- R6Class(
         },
         
         do_pca = function(datasets, input, outlier_sets) {
+            
+            message("Plotting PCAs")
             
             dobs <- self$get_preproc_list(datasets, c(input$data1, input$data2), input$samplecol, input$checkgroup, outlier_sets)
             if (!input$as_label) label <- NULL
@@ -282,65 +285,7 @@ MasterWidgetPlotFuncs <- R6Class(
         do_spotcheck = function(datasets, input) {
             ggplot() + ggtitle("Spotcheck currently not implemented") + theme_classic()
         },
-        
-        # do_table = function(datasets, input) {
-        #     ggplot() + ggtitle("Table currently not implemented") + theme_classic()
-        #     
-        #     thedata <- reactive({
-        #         
-        #         retained <- rowData(stat_data[[input$data]]) %>% data.frame()
-        #         if (length(input$filters) > 0) {
-        #             
-        #             if (input$exclusive) {
-        #                 unique_retained <- retained
-        #                 
-        #                 # Only include features passing all filters
-        #                 for (filter in input$filters) {
-        #                     unique_retained <- unique_retained %>% filter(UQ(as.name(filter)) < input$filterthres)
-        #                 }
-        #                 retained <- unique_retained
-        #             }
-        #             else {
-        #                 all_retained <- NULL
-        #                 for (filter in input$filters) {
-        #                     # Include features passing at least one filter
-        #                     filter_retained <- retained %>% filter(UQ(as.name(filter)) < input$filterthres)
-        #                     all_retained <- rbind(all_retained, filter_retained)
-        #                 }
-        #                 retained <- all_retained %>% distinct()
-        #             }
-        #         }
-        #         
-        #         filtered_selected <- retained %>% 
-        #             dplyr::select(input$fields) %>%
-        #             data.frame()
-        #         
-        #         filtered_selected
-        #     })
-        #     
-        # observe({
-        #     new_choices <- colnames(rowData(stat_data[[input$data]]))
-        #     updateSelectInput(
-        #         session,
-        #         "fields",
-        #         choices=new_choices,
-        #         selected=input$fields
-        #     )
-        # })
-        # 
-        #     output$table = DT::renderDataTable({
-        #         
-        #         thedata() %>% 
-        #             datatable(options=list(
-        #                 pageLength=10, 
-        #                 scrollX=TRUE,
-        #                 # autoWidth=TRUE,
-        #                 columnDefs=list(list(width="10px", targets="_all"))
-        #             )) %>%
-        #             DT::formatRound(columns=input$fields, digits=input$decimals)
-        #     })
-        # },
-        
+
         do_table = function(datasets, input, outlier_sets) {
 
             dobs <- self$get_preproc_list(datasets, input$stat_data, input$samplecol, input$checkgroup, outlier_sets)
