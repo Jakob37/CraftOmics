@@ -220,8 +220,9 @@ MasterWidget <- R6Class(
                                 tabPanel("Scatter", numericInput(inputId="Scatter_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Spotcheck", numericInput(inputId="Spotcheck_height", "Plot height", value=500, step=height_step_size)),
                                 tabPanel("Table", numericInput(inputId="Table_height", "Plot height", value=500, step=height_step_size)),
-                                tabPanel("Profile", numericInput(inputId="Profile_height", "Plot height", value=500, step=height_step_size))
-                            ),
+                                tabPanel("Profile_", numericInput(inputId="Profile_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("StatPCA_", numericInput(inputId="StatPCA_height", "Plot height", value=500, step=height_step_size)),
+                                tabPanel("FeatureClust_", numericInput(inputId="FeatureClust_height", "Plot height", value=500, step=height_step_size))                            ),
                             uiOutput("PlotUI")
                         )
                     )
@@ -306,7 +307,15 @@ MasterWidget <- R6Class(
                     #     columnDefs = list(list(width = '200px', targets = "_all"))
                     # ))
                     
-                    output$Profile = renderPlot({
+                    output$Profile_ = renderPlot({
+                        pf$do_profile(datasets, input)
+                    })
+                    
+                    output$StatPCA_ = renderPlot({
+                        pf$do_profile(datasets, input)
+                    })
+                    
+                    output$FeatureClust_ = renderPlot({
                         pf$do_profile(datasets, input)
                     })
                     
