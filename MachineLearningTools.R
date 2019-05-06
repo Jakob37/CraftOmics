@@ -78,6 +78,11 @@ MachineLearningTools <- R6Class(
             }
             varimp_plts
         },
+        
+        median_impute = function(sdf) {
+            apply(sdf, 1, function(row) { row[is.na(row)] <- median(row, na.rm=TRUE); row })
+        },
+        
         # trained_models is assumed to be a named list of trained Caret models
         # Requires the Caret runs to have been saved by specifying option 'savePredictions'
         get_roc_lists = function(trained_models, truth_pattern) {

@@ -12,6 +12,21 @@ LoadTools <- R6Class(
     
     public = list(
         
+        load_summarized_experiment_from_path = function(ddf_fp, rdf_fp, sample_col, na_field="NA", comment_char="", silent=FALSE) {
+            
+            if (silent) {
+                col_types <- cols()
+            }
+            else {
+                col_types <- NULL
+            }
+            
+            ddf <- read_tsv(ddf_fp, col_types=col_types)
+            rdf <- read_tsv(rdf_fp, na=na_field, comment=comment_char, col_types=col_types)
+            se <- self$load_summarized_experiment(ddf, rdf, sample_col)
+            se
+        },
+        
         load_summarized_experiment = function(ddf, rdf, sample_col, extra_rdfs=NULL) {
             
             if (!(sample_col %in% colnames(ddf))) {

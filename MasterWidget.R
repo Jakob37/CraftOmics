@@ -245,7 +245,6 @@ MasterWidget <- R6Class(
                         else {
                             plotOutput(input$tabs, height=plotHeight())
                         }
-                        
                     })
 
                     output$Barplot = renderPlot({
