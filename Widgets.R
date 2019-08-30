@@ -295,9 +295,6 @@ MyWidgets <- R6Class(
                         selected_1 <- input$cond_plt1
                         selected_2 <- input$cond_plt2
                         
-                        print(selected_1)
-                        print(selected_2)
-                        
                         if (!selected_1 %in% cond_choices) {
                             selected_1 <- cond_choices[1]
                         }

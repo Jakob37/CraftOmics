@@ -47,7 +47,6 @@ MasterWidget <- R6Class(
             explore_plots <- c("Barplot", "QQ", "Density", "PCA", "Cluster")
             
             height_step_size <- 50
-            
             shinyApp(
                 ui = fluidPage(
                     

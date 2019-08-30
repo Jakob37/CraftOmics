@@ -67,7 +67,8 @@ LoadTools <- R6Class(
             sdf <- rdf %>% dplyr::select(dplyr::one_of(ddf[[sample_col]]))
             adf <- rdf %>% dplyr::select(-dplyr::one_of(ddf[[sample_col]]))
             
-            split_levels <- unique(ddf[[split_col]])
+            split_levels <- sort(unique(ddf[[split_col]]))
+
             if (length(split_levels) != 2) {
                 stop("This function is designed for two split levels, found: ", paste(split_levels, collapse=", "))
             }
