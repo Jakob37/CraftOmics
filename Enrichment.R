@@ -8,7 +8,8 @@ library(tidyverse)
 
 Enrichment <- R6Class(
     public = list(
-        perform_gse = function(mat, annot_rows, cond_cols, levels, annot_sets, quiet=FALSE, same_dir=TRUE) {
+        
+        perform_gage_gse = function(mat, annot_rows, cond_cols, levels, annot_sets, quiet=FALSE, same_dir=TRUE) {
         
             library(gage)
             

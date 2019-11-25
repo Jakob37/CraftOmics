@@ -48,16 +48,6 @@ MultivarVis <- R6Class(
             return(plt)
         },
         
-        lda = function(data, color_factor, title="LDA", lds=c(1,2), label=NULL) {
-            
-            
-            
-            lda_obj <- MASS::lda(
-                
-            )
-            
-        },
-
         plotMDS = function(expr_m, levels, comp1=1, comp2=2, title="no title") {
 
             labels <- colnames(expr_m)
@@ -98,7 +88,7 @@ MultivarVis <- R6Class(
             # plot(100 * comp_perc, main="PC loadings", xlab="PC", ylab="Perc. var")
         },
 
-        dendogram = function(data_m, color_levels, labels=NULL, pick_top_variance=null, title="Dendogram") {
+        dendogram = function(data_m, color_levels, labels=NULL, pick_top_variance=null, title="", label_size=3) {
 
             samples <- colnames(data_m)
             
@@ -127,7 +117,7 @@ MultivarVis <- R6Class(
                 theme_dendro() +
                 geom_text(data=label(ddata),
                           aes(x=x, y=y, label=label, color=color),
-                          vjust=0.5, hjust=0, size=3) +
+                          vjust=0.5, hjust=0, size=label_size) +
                 coord_flip() +
                 scale_y_reverse(expand=c(0.2, 0)) +
                 scale_x_continuous(expand=c(0,1)) +

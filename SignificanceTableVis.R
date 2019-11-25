@@ -49,6 +49,64 @@ SignificanceTableVis <- R6Class(
             p
         },
         
+        adf_vulc = function(adf, name, title, show_ids=0, ylim=NULL, xlim=NULL, sig_thres=0.05, fold_cutoff=NULL, p_cutoff=FALSE, id_col=NULL, id_trim=NULL, colors=c("#AAAAAA", "#0C81A2"), ...) {
+            
+            logfc_col <- sprintf("%s.logFC", name)
+            pval_col <- sprintf("%s.P.Value", name)
+            fdr_col <- sprintf("%s.adj.P.Val", name)
+            
+            adf <- adf %>% filter(!is.na(UQ(as.name(pval_col)))) %>% arrange(UQ(as.name(sprintf("%s.P.Value", name))))
+            adf$min_log10_pval <- -log10(adf[[pval_col]])
+            adf$min_log10_qval <- -log10(adf[[fdr_col]])
+            
+            if (p_cutoff) {
+                stat_col <- pval_col
+                legend_label <- "P-val"
+            }
+            else {
+                stat_col <- fdr_col
+                legend_label <- "FDR"
+            }
+            
+            if (is.null(fold_cutoff)) {
+                adf$is_sig <- adf[[stat_col]] < sig_thres
+                fold_label <- ""
+            }
+            else {
+                adf$in_fold_range <- abs(adf[[logfc_col]]) > fold_cutoff
+                adf$is_sig <- adf$in_fold_range & adf[[stat_col]] < sig_thres
+                fold_label <- sprintf(", log2 fold > %s", fold_cutoff)
+            }
+            
+            plt <- ggplot(adf, aes_string(x=logfc_col, y="min_log10_pval", color="is_sig")) + 
+                geom_point(alpha=0.4) + 
+                ggtitle(title) + 
+                xlab("log2 fold") + 
+                ylab("-log10(P-value)") + 
+                labs(color=sprintf("%s < %s%s", legend_label, sig_thres, fold_label)) +
+                scale_color_manual(values=colors)
+            
+            if (!is.null(xlim)) {
+                plt <- plt + xlim(xlim)
+            }
+            
+            if (!is.null(ylim)) {
+                plt <- plt + ylim(ylim)
+            }
+            
+            if (show_ids > 0) {
+                adf$labels <- adf[[id_col]]
+                if (!is.null(id_trim)) {
+                    adf$labels <- adf$labels %>% gsub(sprintf("%s.*", id_trim), "", .)
+                }
+                adf$labels[seq(show_ids+1, nrow(adf))] <- ""
+                plt + geom_text_repel(data=adf, aes(label=labels), min.segment.length = 0, label_size=0.15)
+            }
+            else {
+                plt
+            }
+        },
+        
         threeway_venn = function(sig_table, contrasts, thres_col_base, thres, fold_col_base="logFC",
                                  check_greater_than=FALSE) {
             

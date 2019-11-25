@@ -85,20 +85,20 @@ EvalVis <- R6Class(
             plt
         },
 
-        pvalhist = function(pvals, title="P value histogram", binwidth=0.01, bincount=NULL, vline=NULL, na.rm=FALSE) {
+        pvalhist = function(pvals, title="P value histogram", binwidth=0.01, bincount=NULL, vline=NULL, na.rm=FALSE, color="#268BD2") {
             
             if (is.null(bincount)) {
                 plt <- ggplot(
                     data.frame(pvals=pvals), 
                     aes(pvals)) + 
-                    geom_histogram(binwidth=binwidth, na.rm=na.rm, fill="#268BD2") + 
+                    geom_histogram(binwidth=binwidth, na.rm=na.rm, fill=color) + 
                     ggtitle(title)
             }
             else {
                 plt <- ggplot(
                     data.frame(pvals=pvals), 
                     aes(pvals)) + 
-                    geom_histogram(bins=bincount, na.rm=na.rm, fill="#268BD2") + 
+                    geom_histogram(bins=bincount, na.rm=na.rm, fill=color) + 
                     ggtitle(title)
             }
 
